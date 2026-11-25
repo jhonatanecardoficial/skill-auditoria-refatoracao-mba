@@ -6,7 +6,7 @@ Stack: Python 3 + Flask + SQLAlchemy
 Files: 8 analyzed | ~700 lines of code
 
 ## Summary
-CRITICAL: 3 | HIGH: 2 | MEDIUM: 1 | LOW: 2
+CRITICAL: 3 | HIGH: 2 | MEDIUM: 4 | LOW: 2
 
 ## Findings
 
@@ -41,24 +41,42 @@ Impact: Alto acoplamento entre a camada HTTP e o banco de dados; impossibilidade
 Recommendation: Isolar a lógica de negócio e orquestração de transações em camadas de serviço/controlador (`services/` ou `controllers/`), mantendo as rotas apenas como pontos de entrada e mapeamento de status HTTP.
 
 ### [MEDIUM] Captura Genérica e Mascaramento de Exceções (Bare Except)
-File: routes/task_routes.py:62-63, 137-138, 236-238
-Description: Utilização frequente de blocos `except:` sem especificar a classe de exceção tratada, engolindo erros com retornos genéricos de erro 500 sem registrar stack traces ou logs de diagnóstico.
+File: routes/task_routes.py:62-63, 137-138, 236-238, utils/helpers.py:46, 49, 88
+Description: Utilização frequente de blocos `except:` vazios sem especificar a classe de exceção tratada no roteamento e no módulo de helpers, engolindo erros com retornos genéricos de erro 500 sem registrar stack traces ou logs de diagnóstico.
 Impact: Silencia falhas críticas de infraestrutura, `KeyboardInterrupt`, `MemoryError` ou erros de sintaxe e digitação, dificultando drasticamente a depuração de incidentes em ambiente produtivo.
-Recommendation: Capturar classes de exceção específicas (`ValueError`, `SQLAlchemyError`) e registrar logs com `logging`, além de usar manipuladores centralizados de erro (`@app.errorhandler`).
+Recommendation: Capturar classes de exceção específicas (`ValueError`, `TypeError`, `SQLAlchemyError`) e registrar logs com `logging`, além de usar manipuladores centralizados de erro (`@app.errorhandler`).
+
+### [MEDIUM] Credenciais SMTP Hardcoded no Serviço de Notificações
+File: services/notification_service.py:7-10
+Description: O serviço de notificações instancia parâmetros de conexão SMTP diretamente no método `__init__`, incluindo senha em texto plano (`self.email_password = 'senha123'`) e usuário fixo (`taskmanager@gmail.com`).
+Impact: Exposição de credenciais de serviço de email no código-fonte, impossibilitando a rotação segura de senhas e permitindo o uso indevido do servidor SMTP por terceiros.
+Recommendation: Externalizar as credenciais SMTP para variáveis de ambiente carregadas através de classe de configuração (`config/settings.py`), com injeção segura na inicialização do serviço.
+
+### [MEDIUM] Ausência de Validação de Tipos em Filtros de Busca e Risco de Erro 500
+File: routes/task_routes.py:224-259
+Description: O endpoint `/tasks/search` recebe query parameters como `priority` e `user_id` e realiza casts manuais parciais com blocos pass, além de não validar formatos de busca, arriscando comportamentos inconsistentes e erros 500 não tratados.
+Impact: Requisições com parâmetros de query inválidos (`priority=invalido`) podem gerar comportamentos anômalos ou quebrar o fluxo HTTP sem uma resposta clara de 400 Bad Request ao cliente.
+Recommendation: Implementar validação e coerção segura de query parameters na camada de Controller retornando HTTP 400 com payload explicativo em caso de tipo incorreto.
+
+### [MEDIUM] Código Morto, Imports Não Utilizados e Acoplamento em Helpers
+File: utils/helpers.py:1-8, 31-34
+Description: O arquivo `helpers.py` possui 5 imports mortos/não utilizados (`import sys`, `import math`, `import hashlib`, `import os`, `import json`), importa `uuid` dentro do corpo de função, e implementa verificações de tipo com `type(tags) == list` em vez de `isinstance`. Além disso, rotas reescrevem validações manualmente em vez de reutilizar as funções já existentes no helper.
+Impact: Degradação da qualidade interna do código, violação de convenções de estilo (PEP 8) e duplicação desnecessária de lógica de validação (violação DRY).
+Recommendation: Limpar imports mortos, mover imports de escopo de módulo para o topo, adotar `isinstance()` para checagem de tipos e integrar as funções do helper diretamente aos Controllers da aplicação.
 
 ### [LOW] Métodos e Funções Obsoletas e Depreciadas
-File: models/user.py:14, models/task.py:15-16, routes/task_routes.py:42, 51, 67, 117, 122
+File: models/user.py:14, models/task.py:15-16, routes/task_routes.py:42, 51, 67, 117, 122, services/notification_service.py:35, utils/helpers.py:38
 Description: Utilização de `datetime.utcnow()` (depreciada a partir do Python 3.12 por não carregar timezone explícito) e de `Model.query.get(id)` (depreciada na versão 2.0 do SQLAlchemy).
 Impact: Gera emissão de avisos `DeprecationWarning` no runtime e risco iminente de quebra de compatibilidade em atualizações futuras das bibliotecas.
 Recommendation: Migrar para `datetime.now(timezone.utc)` e utilizar o padrão moderno `db.session.get(Model, id)`.
 
 ### [LOW] Lógica Booleana Redundante e Código Prolixo
-File: models/user.py:34-38, models/task.py:38-48, 50-60
-Description: Métodos de verificação como `is_admin`, `validate_status` e `is_overdue` utilizam condicionais `if ... return True else return False` em cascata em vez de retornar a expressão lógica diretamente.
+File: models/user.py:34-38, models/task.py:38-48, 50-60, utils/helpers.py:19-23, 52-55
+Description: Métodos de verificação como `is_admin`, `validate_status`, `is_overdue`, `validate_email` e `is_valid_color` utilizam condicionais `if ... return True else return False` em cascata em vez de retornar a expressão lógica diretamente.
 Impact: Complexidade ciclomática desnecessária, piorando a legibilidade e manutenibilidade do código.
-Recommendation: Simplificar os métodos retornando diretamente a expressão de comparação booleana (ex.: `return self.role == 'admin'`).
+Recommendation: Simplificar os métodos retornando diretamente a expressão de comparação booleana (ex.: `return bool(re.match(...))`).
 
 ================================
-Total: 8 findings
+Total: 11 findings
 ================================
 Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]

@@ -170,6 +170,34 @@ class TestTaskManagerAPI(unittest.TestCase):
         self.assertEqual(res_cats.status_code, 200)
         self.assertGreaterEqual(len(res_cats.get_json()), 2)
 
+    def test_05_clean_architecture_and_helpers_validation(self):
+        """Valida desacoplamento de camadas, sanitização de erros e funções utilitárias."""
+        # 1. Validação de parâmetros em rotas de busca (400 em vez de crash 500)
+        res_bad_priority = self.client.get("/tasks/search?priority=invalido")
+        self.assertEqual(res_bad_priority.status_code, 400)
+        self.assertIn("error", res_bad_priority.get_json())
+
+        res_bad_uid = self.client.get("/tasks/search?user_id=invalido")
+        self.assertEqual(res_bad_uid.status_code, 400)
+        self.assertIn("error", res_bad_uid.get_json())
+
+        # 2. Teste do serviço de notificação desacoplado
+        from services.notification_service import NotificationService
+        service = NotificationService()
+        self.assertNotEqual(service.email_password, "senha123")
+
+        # 3. Teste das funções utilitárias em helpers
+        from utils.helpers import validate_email, calculate_percentage, parse_date, is_valid_color
+        self.assertTrue(validate_email("usuario@dominio.com"))
+        self.assertFalse(validate_email("email-invalido"))
+        self.assertEqual(calculate_percentage(50, 200), 25.0)
+        self.assertEqual(calculate_percentage(10, 0), 0.0)
+        self.assertIsNotNone(parse_date("2026-11-25"))
+        self.assertIsNotNone(parse_date("25/11/2026"))
+        self.assertIsNone(parse_date("data-totalmente-errada"))
+        self.assertTrue(is_valid_color("#123456"))
+        self.assertFalse(is_valid_color("vermelho"))
+
 
 if __name__ == "__main__":
     unittest.main()

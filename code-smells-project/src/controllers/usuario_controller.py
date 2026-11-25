@@ -3,6 +3,7 @@
 from typing import Tuple
 from flask import jsonify, request, Response
 from src.models.usuario import UsuarioModel
+from src.middlewares.auth_middleware import generate_auth_token
 
 
 def listar_usuarios() -> Tuple[Response, int]:
@@ -43,7 +44,7 @@ def criar_usuario() -> Tuple[Response, int]:
 
 
 def login() -> Tuple[Response, int]:
-    """Autentica o usuário com email e senha."""
+    """Autentica o usuário com email e senha e emite token de acesso assinado."""
     dados = request.get_json(silent=True)
     if not dados:
         return jsonify({"erro": "Dados inválidos"}), 400
@@ -56,8 +57,16 @@ def login() -> Tuple[Response, int]:
 
     usuario = UsuarioModel.autenticar(email, senha)
     if usuario:
+        token = generate_auth_token(usuario)
         return (
-            jsonify({"dados": usuario, "sucesso": True, "mensagem": "Login OK"}),
+            jsonify(
+                {
+                    "dados": usuario,
+                    "token": token,
+                    "sucesso": True,
+                    "mensagem": "Login OK",
+                }
+            ),
             200,
         )
     return (

@@ -49,7 +49,7 @@ src/
 - Receber dados validados da requisição.
 - Orquestrar as chamadas aos Models ou Services.
 - Decidir qual código de status HTTP retornar (`200`, `201`, `400`, `404`, `500`).
-- **NÃO DEVE:** Executar queries SQL diretas ou conter concatenação de strings de banco.
+- **NÃO DEVE:** Executar queries SQL diretas (`cursor.execute`, `db.run`, `SELECT ...`), conter concatenação de strings de banco ou acessar diretamente conexões de baixo nível (queries devem pertencer exclusivamente aos Models).
 
 ### 3.3 Camada View / Routes (`views/` ou `routes/`)
 - Mapear a URL e verbo HTTP (`GET`, `POST`, `PUT`, `DELETE`) para a função de Controller correspondente.

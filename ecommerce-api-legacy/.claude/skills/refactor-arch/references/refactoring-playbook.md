@@ -276,3 +276,106 @@ const { userName, cardNumber } = req.body;
 const VISA_PREFIX = "4";
 const isPaymentApproved = cardNumber.startsWith(VISA_PREFIX);
 ```
+
+---
+
+## Padrão 11: Remoção de Backdoors SQL e Proteção de Endpoints Administrativos Destrutivos
+
+### Caso A: Remoção Definitiva de Backdoors de Execução SQL Arbitrária
+Endpoints como `/admin/query` que recebem e executam SQL arbitrário fornecido pelo cliente são backdoors inaceitáveis e devem ser **completamente removidos** da aplicação, respondendo HTTP 404.
+
+```python
+# ANTES (Vulnerável - Execução arbitrária de SQL):
+@admin_bp.route("/admin/query", methods=["POST"])
+def executar_query():
+    sql = request.json.get("sql")
+    cursor.execute(sql)
+    return jsonify({"resultado": cursor.fetchall()})
+
+# DEPOIS (Seguro - Rota eliminada da aplicação):
+# A rota /admin/query é removida por completo da tabela de rotas.
+# Qualquer requisição para /admin/query recebe automaticamente HTTP 404 Not Found.
+```
+
+### Caso B: Proteção Estrita de Endpoints Administrativos Destrutivos
+Operações como `/admin/reset-db` devem exigir autenticação robusta (Bearer Token assinado), autorização de papel (`tipo == "admin"`) e restrição mandatória de ambiente (bloqueio em produção).
+
+```python
+# middlewares/auth_middleware.py
+from functools import wraps
+from flask import request, jsonify, current_app
+
+def require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # 1. Bloqueio em ambiente de produção
+        env = current_app.config.get("ENVIRONMENT", "production")
+        if env not in ("development", "testing"):
+            return jsonify({"erro": "Operação não permitida neste ambiente", "sucesso": False}), 403
+
+        # 2. Validação de token Bearer
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"erro": "Token de autenticação não fornecido", "sucesso": False}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_auth_token(token)
+        if not user_data:
+            return jsonify({"erro": "Token inválido ou expirado", "sucesso": False}), 401
+
+        if user_data.get("tipo") != "admin":
+            return jsonify({"erro": "Acesso restrito a administradores", "sucesso": False}), 403
+
+        return f(*args, **kwargs)
+    return decorated
+
+# routes/admin_routes.py
+@admin_bp.route("/admin/reset-db", methods=["POST"])
+@require_admin
+def reset_database_route():
+    sucesso, mensagem = admin_controller.reset_database()
+    return jsonify({"mensagem": mensagem, "sucesso": sucesso}), 200
+```
+
+---
+
+## Padrão 12: Extração de Fat Routes e Migração Integral para MVC em Projetos Parcialmente Organizados
+
+Projetos que já possuem separação inicial de pastas (ex.: rotas em Blueprints) frequentemente sofrem de **Fat Routes**, onde validações, queries diretas de ORM (`db.session`) e regras de negócio continuam misturadas dentro das funções de rota.
+
+### Antes (Fat Route acoplada ao ORM e sem camada de Controller/Config):
+```python
+# routes/task_routes.py
+@task_bp.route('/tasks', methods=['POST'])
+def create_task():
+    data = request.get_json()
+    if not data or not data.get('title'):
+        return jsonify({'error': 'Title is required'}), 400
+    task = Task(title=data['title'], description=data.get('description'))
+    db.session.add(task)
+    db.session.commit()
+    return jsonify(task.to_dict()), 201
+```
+
+### Depois (Padrão MVC completo com Controller desacoplado):
+```python
+# controllers/task_controller.py
+class TaskController:
+    @staticmethod
+    def create_task(data):
+        if not data or not data.get('title'):
+            return {'error': 'Title is required'}, 400
+        task = Task(
+            title=data['title'].strip(),
+            description=data.get('description', '').strip()
+        )
+        db.session.add(task)
+        db.session.commit()
+        return task.to_dict(), 201
+
+# routes/task_routes.py
+@task_bp.route('/tasks', methods=['POST'])
+def create_task_route():
+    result, status = TaskController.create_task(request.get_json() or {})
+    return jsonify(result), status
+```

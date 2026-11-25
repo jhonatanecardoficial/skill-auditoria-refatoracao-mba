@@ -6,7 +6,7 @@ Stack: Python 3 + Flask
 Files: 4 analyzed | ~700 lines of code
 
 ## Summary
-CRITICAL: 4 | HIGH: 3 | MEDIUM: 3 | LOW: 3
+CRITICAL: 5 | HIGH: 3 | MEDIUM: 3 | LOW: 3
 
 ## Findings
 

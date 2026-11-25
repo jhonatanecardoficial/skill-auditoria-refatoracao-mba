@@ -1,5 +1,6 @@
 /**
  * Controller responsável pelo fluxo de Checkout e matrícula de alunos.
+ * Valida os dados da requisição, orquestra models e assegura conformidade PCI-DSS.
  */
 
 const CourseModel = require('../models/course.model');
@@ -9,47 +10,52 @@ const PaymentModel = require('../models/payment.model');
 const AuditModel = require('../models/audit.model');
 const { hashPassword, maskCard } = require('../services/security.service');
 
+const VISA_CARD_PREFIX = '4';
+const DEFAULT_PASSWORD_FALLBACK = '123456';
+
 async function processCheckout(req, res, next) {
   try {
-    const u = req.body.usr;
-    const e = req.body.eml;
-    const p = req.body.pwd;
-    const cid = req.body.c_id;
-    const cc = req.body.card;
+    const userName = req.body.usr;
+    const email = req.body.eml;
+    const rawPassword = req.body.pwd;
+    const courseId = req.body.c_id;
+    const cardNumber = req.body.card;
 
-    if (!u || !e || !cid || !cc) {
+    // Validação de presença dos campos obrigatórios do contrato da API
+    if (!userName || !email || !courseId || !cardNumber) {
       return res.status(400).send("Bad Request");
     }
 
-    const course = await CourseModel.findActiveById(cid);
+    const course = await CourseModel.findActiveById(courseId);
     if (!course) {
       return res.status(404).send("Curso não encontrado");
     }
 
-    let user = await UserModel.findByEmail(e);
+    let user = await UserModel.findByEmail(email);
     let userId;
 
     if (!user) {
-      const secureHash = hashPassword(p || "123456");
-      userId = await UserModel.createUser(u, e, secureHash);
+      const passwordToHash = rawPassword || DEFAULT_PASSWORD_FALLBACK;
+      const secureHash = hashPassword(passwordToHash);
+      userId = await UserModel.createUser(userName, email, secureHash);
     } else {
       userId = user.id;
     }
 
     // Processamento seguro do cartão (mascaramento em conformidade com PCI-DSS)
-    const maskedCard = maskCard(cc);
-    console.log(`[PAYMENT] Processando cartão ${maskedCard} para o curso ${cid}`);
+    const maskedCard = maskCard(cardNumber);
+    console.log(`[PAYMENT] Processando cartão ${maskedCard} para o curso ${courseId}`);
 
-    const status = cc.startsWith("4") ? "PAID" : "DENIED";
+    const status = cardNumber.startsWith(VISA_CARD_PREFIX) ? "PAID" : "DENIED";
     if (status === "DENIED") {
       return res.status(400).send("Pagamento recusado");
     }
 
-    const enrId = await EnrollmentModel.create(userId, cid);
-    await PaymentModel.create(enrId, course.price, status);
-    await AuditModel.log(`Checkout curso ${cid} por ${userId}`);
+    const enrollmentId = await EnrollmentModel.create(userId, courseId);
+    await PaymentModel.create(enrollmentId, course.price, status);
+    await AuditModel.log(`Checkout curso ${courseId} por ${userId}`);
 
-    return res.status(200).json({ msg: "Sucesso", enrollment_id: enrId });
+    return res.status(200).json({ msg: "Sucesso", enrollment_id: enrollmentId });
   } catch (err) {
     next(err);
   }

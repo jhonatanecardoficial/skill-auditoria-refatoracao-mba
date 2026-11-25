@@ -1,28 +1,13 @@
 /**
  * Controller responsável pelos Relatórios Administrativos.
- * Elimina o problema N+1 através de agregações relacionais otimizadas.
+ * Utiliza o ReportModel para busca de dados e formata o resultado para apresentação.
  */
 
-const { dbAll } = require('../database/db');
+const ReportModel = require('../models/report.model');
 
 async function getFinancialReport(req, res, next) {
   try {
-    const query = `
-      SELECT
-        c.id AS course_id,
-        c.title AS course_title,
-        e.id AS enrollment_id,
-        u.name AS student_name,
-        p.amount AS paid_amount,
-        p.status AS payment_status
-      FROM courses c
-      LEFT JOIN enrollments e ON c.id = e.course_id
-      LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN payments p ON e.id = p.enrollment_id
-      ORDER BY c.id ASC
-    `;
-
-    const rows = await dbAll(query);
+    const rows = await ReportModel.getFinancialReportData();
 
     const reportMap = new Map();
 
@@ -53,7 +38,7 @@ async function getFinancialReport(req, res, next) {
     }
 
     const report = Array.from(reportMap.values());
-    return res.json(report);
+    return res.status(200).json(report);
   } catch (err) {
     next(err);
   }

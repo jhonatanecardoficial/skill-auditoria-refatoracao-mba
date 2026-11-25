@@ -41,5 +41,10 @@ Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]
 
 1. **Ordenação por Severidade:** Os achados devem ser apresentados obrigatoriamente agrupados ou ordenados do mais grave para o menos grave: `CRITICAL` → `HIGH` → `MEDIUM` → `LOW`.
 2. **Localização Exata:** Cada achado deve indicar o arquivo e intervalo ou linha específica (ex.: `models.py:28-50` ou `AppManager.js:45`).
-3. **Mínimo de Achados:** O relatório deve conter **no mínimo 5 findings**, contendo pelo menos 1 `CRITICAL` ou `HIGH`.
-4. **Pausa para Confirmação Humana:** Ao final da emissão do relatório, a skill deve **pausar obrigatoriamente** exibindo a pergunta `Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]`, aguardando a aprovação explícita do usuário antes de realizar qualquer alteração na codebase.
+3. **Consistência Aritmética Rigorosa:** O sumário executivo no início do relatório deve conter números estritamente consistentes:
+   `CRITICAL: C | HIGH: H | MEDIUM: M | LOW: L` onde `C + H + M + L == Total`. A contagem descrita no sumário deve corresponder com precisão absoluta à quantidade de blocos de achados detalhados no corpo do relatório e no rodapé.
+4. **Cotas Mínimas Exigidas:** O relatório de auditoria e a análise manual devem conter no mínimo:
+   - Pelo menos 1 achado `CRITICAL` ou `HIGH`;
+   - Pelo menos 2 achados `MEDIUM`;
+   - Pelo menos 2 achados `LOW`.
+5. **Pausa para Confirmação Humana:** Ao final da emissão do relatório, a skill deve **pausar obrigatoriamente** exibindo a pergunta `Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]`, aguardando a aprovação explícita do usuário antes de realizar qualquer alteração na codebase.

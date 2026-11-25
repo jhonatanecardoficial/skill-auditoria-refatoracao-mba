@@ -1,39 +1,41 @@
-"""Aplicação Task Manager API refatorada."""
+"""Aplicação Task Manager API refatorada em padrão MVC completo."""
 
-import os
 from datetime import datetime, timezone
-from typing import Tuple
+import os
+from typing import Optional, Tuple
 from flask import Flask, jsonify, Response
 from flask_cors import CORS
-from werkzeug.exceptions import HTTPException
 
+from config.settings import Config
 from database import db
+from middlewares.error_handler import register_error_handlers
 from routes.task_routes import task_bp
 from routes.user_routes import user_bp
 from routes.report_routes import report_bp
 
 
-def create_app(test_config: dict = None) -> Flask:
-    """Fábrica de aplicação para o serviço Task Manager API."""
+def create_app(test_config: Optional[dict] = None) -> Flask:
+    """Fábrica de aplicação (Composition Root) para o serviço Task Manager API."""
     app = Flask(__name__)
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "SQLALCHEMY_DATABASE_URI", "sqlite:///tasks.db"
-    )
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SECRET_KEY"] = os.getenv(
-        "SECRET_KEY", "dev-secure-secret-key-task-manager-32-chars"
-    )
+    # Carrega configurações base
+    app.config.from_object(Config)
 
+    # Aplica configurações de teste quando fornecidas
     if test_config:
         app.config.update(test_config)
 
+    # Inicializa extensões globais
     CORS(app)
     db.init_app(app)
 
+    # Registra rotas (Blueprints desacoplados)
     app.register_blueprint(task_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(report_bp)
+
+    # Registra middleware centralizado de erro
+    register_error_handlers(app)
 
     @app.route("/health")
     def health() -> Tuple[Response, int]:
@@ -56,16 +58,6 @@ def create_app(test_config: dict = None) -> Flask:
             200,
         )
 
-    @app.errorhandler(HTTPException)
-    def handle_http_exception(exc: HTTPException) -> Tuple[Response, int]:
-        """Trata exceções HTTP conhecidas."""
-        return jsonify({"error": exc.description}), exc.code or 500
-
-    @app.errorhandler(Exception)
-    def handle_generic_exception(exc: Exception) -> Tuple[Response, int]:
-        """Trata exceções inesperadas com resposta JSON padronizada."""
-        return jsonify({"error": str(exc)}), 500
-
     with app.app_context():
         db.create_all()
 
@@ -76,4 +68,4 @@ app = create_app()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=app.config.get("DEBUG", False), host="0.0.0.0", port=port)

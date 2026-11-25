@@ -25,7 +25,7 @@ from src.controllers.pedido_controller import (
 )
 from src.controllers.relatorio_controller import relatorio_vendas
 from src.controllers.health_controller import health_check, index
-from src.controllers.admin_controller import reset_database, executar_query
+from src.controllers.admin_controller import reset_database
 
 __all__ = [
     "listar_produtos",
@@ -46,5 +46,4 @@ __all__ = [
     "health_check",
     "index",
     "reset_database",
-    "executar_query",
 ]

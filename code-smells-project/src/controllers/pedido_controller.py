@@ -4,6 +4,7 @@ import logging
 from typing import Tuple
 from flask import jsonify, request, Response
 from src.models.pedido import PedidoModel
+from src.services.pedido_service import PedidoService
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def criar_pedido() -> Tuple[Response, int]:
     if not itens or not isinstance(itens, list) or len(itens) == 0:
         return jsonify({"erro": "Pedido deve ter pelo menos 1 item"}), 400
 
-    resultado = PedidoModel.criar(usuario_id, itens)
+    resultado = PedidoService.processar_pedido(usuario_id, itens)
     if "erro" in resultado:
         return jsonify({"erro": resultado["erro"], "sucesso": False}), 400
 

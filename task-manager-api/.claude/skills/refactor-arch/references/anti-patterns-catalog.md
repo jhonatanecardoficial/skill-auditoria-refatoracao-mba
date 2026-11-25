@@ -107,3 +107,11 @@ Este catálogo orienta a **Fase 2 (Auditoria Arquitetural)** da skill `refactor-
   - Números sem contexto explicativo (`997.00`, `10000`, `200`).
 - **Impacto:** Dificulta a legibilidade e a manutenção colaborativa do código.
 - **Recomendação:** Utilizar nomes descritivos e constantes/enums nomeados.
+
+### 12. Missing Route Parameter Validation and Information Disclosure (MEDIUM)
+- **Descrição:** Manipuladores de rota que realizam conversões de tipo ingênuas em query parameters (ex.: `int(request.args.get('preco_min'))`) sem validação prévia de tipo ou formato, disparando exceções não tratadas (HTTP 500) e potenciais vazamentos de stack traces e mensagens internas de erro em ambiente produtivo.
+- **Sinais de Detecção:**
+  - Conversões diretas de query parameters sem `try/except` ou schema de validação: `int(request.args.get('user_id'))`.
+  - Retorno de `str(exc)` ou detalhes da exceção diretamente no JSON de erro HTTP 500.
+- **Impacto:** Negação de serviço parcial (crashes de requisição), códigos de status incorretos (500 em vez de 400 Bad Request) e vazamento de informações de infraestrutura para atacantes.
+- **Recomendação:** Validar parâmetros de entrada na camada de rota/controller retornando HTTP 400 em caso de formato inválido, e registrar erros internos apenas nos logs do servidor sem expor stack traces no payload de resposta HTTP 500.

@@ -2,32 +2,20 @@
 
 from typing import Tuple
 from flask import jsonify, Response
-from src.database.connection import get_db
+from src.models.health import HealthModel
 from src.config.settings import settings
 
 
 def health_check() -> Tuple[Response, int]:
-    """Verifica a conectividade do banco de dados e retorna métricas sem vazar segredos."""
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT 1")
-    cursor.execute("SELECT COUNT(*) FROM produtos")
-    produtos = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
-    usuarios = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM pedidos")
-    pedidos = cursor.fetchone()[0]
+    """Verifica a conectividade do banco de dados e retorna métricas sem vazar segredos ou executar SQL direto no controller."""
+    stats = HealthModel.get_stats()
 
     return (
         jsonify(
             {
                 "status": "ok",
                 "database": "connected",
-                "counts": {
-                    "produtos": produtos,
-                    "usuarios": usuarios,
-                    "pedidos": pedidos,
-                },
+                "counts": stats,
                 "versao": "1.0.0",
                 "ambiente": settings.environment,
             }

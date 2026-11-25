@@ -161,6 +161,51 @@ class TestCodeSmellsProject(unittest.TestCase):
         self.assertGreater(rel_data["total_pedidos"], 0)
         self.assertGreater(rel_data["faturamento_bruto"], 0)
 
+    def test_05_admin_security_and_query_validation(self):
+        """Valida remoção de backdoor SQL (/admin/query), proteção estrita de reset-db e validações de rota."""
+        # 1. Backdoor /admin/query DEVE retornar 404 Not Found
+        res_backdoor = self.client.post("/admin/query", json={"sql": "SELECT 1"})
+        self.assertEqual(res_backdoor.status_code, 404)
+
+        # 2. Reset-db sem token de autenticação DEVE retornar 401
+        res_reset_no_auth = self.client.post("/admin/reset-db")
+        self.assertEqual(res_reset_no_auth.status_code, 401)
+        self.assertFalse(res_reset_no_auth.get_json()["sucesso"])
+
+        # 3. Login como usuário comum (cliente) e tentativa de resetar banco DEVE retornar 403
+        login_cliente = self.client.post(
+            "/login",
+            json={"email": "carlos@empresa.com", "senha": "senha-forte-1234"},
+        )
+        self.assertEqual(login_cliente.status_code, 200)
+        token_cliente = login_cliente.get_json()["token"]
+
+        res_reset_forbidden = self.client.post(
+            "/admin/reset-db",
+            headers={"Authorization": f"Bearer {token_cliente}"},
+        )
+        self.assertEqual(res_reset_forbidden.status_code, 403)
+
+        # 4. Login como usuário administrador e reset com sucesso
+        login_admin = self.client.post(
+            "/login",
+            json={"email": "admin@loja.com", "senha": "admin123"},
+        )
+        self.assertEqual(login_admin.status_code, 200)
+        token_admin = login_admin.get_json()["token"]
+
+        res_reset_ok = self.client.post(
+            "/admin/reset-db",
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+        self.assertEqual(res_reset_ok.status_code, 200)
+        self.assertTrue(res_reset_ok.get_json()["sucesso"])
+
+        # 5. Validação robusta de tipos em query strings (HTTP 400 em vez de 500)
+        res_invalid_param = self.client.get("/produtos/busca?preco_min=invalido")
+        self.assertEqual(res_invalid_param.status_code, 400)
+        self.assertFalse(res_invalid_param.get_json()["sucesso"])
+
 
 if __name__ == "__main__":
     unittest.main()

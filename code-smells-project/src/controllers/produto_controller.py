@@ -13,6 +13,9 @@ CATEGORIAS_VALIDAS = [
     "livros",
 ]
 
+NOME_MIN_LEN = 2
+NOME_MAX_LEN = 200
+
 
 def listar_produtos() -> Tuple[Response, int]:
     """Retorna a listagem de todos os produtos cadastrados."""
@@ -85,6 +88,12 @@ def atualizar_produto(id: int) -> Tuple[Response, int]:
     estoque = dados["estoque"]
     categoria = str(dados.get("categoria", "geral")).strip()
 
+    if len(nome) < NOME_MIN_LEN or len(nome) > NOME_MAX_LEN:
+        return (
+            jsonify({"erro": f"Nome deve ter entre {NOME_MIN_LEN} e {NOME_MAX_LEN} caracteres"}),
+            400,
+        )
+
     if not isinstance(preco, (int, float)) or preco < 0:
         return jsonify({"erro": "Preço não pode ser negativo"}), 400
     if not isinstance(estoque, int) or estoque < 0:
@@ -105,14 +114,31 @@ def deletar_produto(id: int) -> Tuple[Response, int]:
 
 
 def buscar_produtos() -> Tuple[Response, int]:
-    """Filtra produtos com parâmetros de query string."""
+    """Filtra produtos com parâmetros de query string e validação robusta."""
     termo = request.args.get("q", "")
     categoria = request.args.get("categoria", None)
     preco_min_str = request.args.get("preco_min", None)
     preco_max_str = request.args.get("preco_max", None)
 
-    preco_min = float(preco_min_str) if preco_min_str is not None else None
-    preco_max = float(preco_max_str) if preco_max_str is not None else None
+    preco_min = None
+    if preco_min_str is not None:
+        try:
+            preco_min = float(preco_min_str)
+        except (ValueError, TypeError):
+            return (
+                jsonify({"erro": "Parâmetro preco_min deve ser numérico", "sucesso": False}),
+                400,
+            )
+
+    preco_max = None
+    if preco_max_str is not None:
+        try:
+            preco_max = float(preco_max_str)
+        except (ValueError, TypeError):
+            return (
+                jsonify({"erro": "Parâmetro preco_max deve ser numérico", "sucesso": False}),
+                400,
+            )
 
     resultados = ProdutoModel.buscar(
         termo=termo,

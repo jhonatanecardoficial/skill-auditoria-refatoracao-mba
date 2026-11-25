@@ -51,9 +51,9 @@ def criar_produto() -> Tuple[Response, int]:
         return jsonify({"erro": "Preço não pode ser negativo"}), 400
     if not isinstance(estoque, int) or estoque < 0:
         return jsonify({"erro": "Estoque não pode ser negativo"}), 400
-    if len(nome) < 2:
+    if len(nome) < NOME_MIN_LEN:
         return jsonify({"erro": "Nome muito curto"}), 400
-    if len(nome) > 200:
+    if len(nome) > NOME_MAX_LEN:
         return jsonify({"erro": "Nome muito longo"}), 400
     if categoria not in CATEGORIAS_VALIDAS:
         return (
@@ -91,6 +91,11 @@ def atualizar_produto(id: int) -> Tuple[Response, int]:
     if len(nome) < NOME_MIN_LEN or len(nome) > NOME_MAX_LEN:
         return (
             jsonify({"erro": f"Nome deve ter entre {NOME_MIN_LEN} e {NOME_MAX_LEN} caracteres"}),
+            400,
+        )
+    if categoria not in CATEGORIAS_VALIDAS:
+        return (
+            jsonify({"erro": f"Categoria inválida. Válidas: {CATEGORIAS_VALIDAS}"}),
             400,
         )
 

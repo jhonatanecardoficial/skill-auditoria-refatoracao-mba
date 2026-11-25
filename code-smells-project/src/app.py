@@ -1,5 +1,6 @@
 """Fábrica de aplicação (Application Factory) para o serviço da Loja."""
 
+import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -28,6 +29,7 @@ def create_app(test_config: dict = None) -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["DEBUG"] = settings.debug
+    app.config["ENVIRONMENT"] = os.getenv("ENVIRONMENT", settings.environment)
 
     if test_config:
         app.config.update(test_config)

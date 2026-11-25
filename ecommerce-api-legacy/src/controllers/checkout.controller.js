@@ -3,6 +3,7 @@
  * Valida os dados da requisição, orquestra models e assegura conformidade PCI-DSS.
  */
 
+const crypto = require('crypto');
 const CourseModel = require('../models/course.model');
 const UserModel = require('../models/user.model');
 const EnrollmentModel = require('../models/enrollment.model');
@@ -11,7 +12,6 @@ const AuditModel = require('../models/audit.model');
 const { hashPassword, maskCard } = require('../services/security.service');
 
 const VISA_CARD_PREFIX = '4';
-const DEFAULT_PASSWORD_FALLBACK = '123456';
 
 async function processCheckout(req, res, next) {
   try {
@@ -35,7 +35,7 @@ async function processCheckout(req, res, next) {
     let userId;
 
     if (!user) {
-      const passwordToHash = rawPassword || DEFAULT_PASSWORD_FALLBACK;
+      const passwordToHash = rawPassword || crypto.randomBytes(16).toString('hex');
       const secureHash = hashPassword(passwordToHash);
       userId = await UserModel.createUser(userName, email, secureHash);
     } else {

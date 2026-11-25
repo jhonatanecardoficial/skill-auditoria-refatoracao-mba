@@ -2,13 +2,22 @@
 
 from datetime import datetime, timezone
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import joinedload
 
 from database import db
 from models.category import Category
 from models.task import Task
 from models.user import User
+from utils.helpers import (
+    calculate_percentage,
+    DEFAULT_PRIORITY,
+    MAX_TITLE_LENGTH,
+    MIN_TITLE_LENGTH,
+    parse_date,
+    sanitize_string,
+    VALID_STATUSES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,23 +75,23 @@ class TaskController:
         if not data:
             return {"error": "Dados inválidos"}, 400
 
-        title = data.get("title")
+        title = sanitize_string(data.get("title"))
         if not title:
             return {"error": "Título é obrigatório"}, 400
-        if len(title) < 3:
+        if len(title) < MIN_TITLE_LENGTH:
             return {"error": "Título muito curto"}, 400
-        if len(title) > 200:
+        if len(title) > MAX_TITLE_LENGTH:
             return {"error": "Título muito longo"}, 400
 
-        description = data.get("description", "")
+        description = sanitize_string(data.get("description", "")) or ""
         status = data.get("status", "pending")
-        priority = data.get("priority", 3)
+        priority = data.get("priority", DEFAULT_PRIORITY)
         user_id = data.get("user_id")
         category_id = data.get("category_id")
         due_date = data.get("due_date")
         tags = data.get("tags")
 
-        if status not in ("pending", "in_progress", "done", "cancelled"):
+        if status not in VALID_STATUSES:
             return {"error": "Status inválido"}, 400
         if not isinstance(priority, int) or priority < 1 or priority > 5:
             return {"error": "Prioridade deve ser entre 1 e 5"}, 400
@@ -101,10 +110,10 @@ class TaskController:
         task.category_id = category_id
 
         if due_date:
-            try:
-                task.due_date = datetime.strptime(due_date, "%Y-%m-%d")
-            except ValueError:
+            parsed_due = parse_date(due_date)
+            if not parsed_due:
                 return {"error": "Formato de data inválido. Use YYYY-MM-DD"}, 400
+            task.due_date = parsed_due
 
         if tags:
             task.tags = ",".join(tags) if isinstance(tags, list) else tags
@@ -130,18 +139,18 @@ class TaskController:
             return {"error": "Dados inválidos"}, 400
 
         if "title" in data:
-            t = data["title"]
-            if len(t) < 3:
+            t = sanitize_string(str(data["title"])) or ""
+            if len(t) < MIN_TITLE_LENGTH:
                 return {"error": "Título muito curto"}, 400
-            if len(t) > 200:
+            if len(t) > MAX_TITLE_LENGTH:
                 return {"error": "Título muito longo"}, 400
             task.title = t
 
         if "description" in data:
-            task.description = data["description"]
+            task.description = sanitize_string(data["description"])
 
         if "status" in data:
-            if data["status"] not in ("pending", "in_progress", "done", "cancelled"):
+            if data["status"] not in VALID_STATUSES:
                 return {"error": "Status inválido"}, 400
             task.status = data["status"]
 
@@ -166,10 +175,10 @@ class TaskController:
         if "due_date" in data:
             d = data["due_date"]
             if d:
-                try:
-                    task.due_date = datetime.strptime(d, "%Y-%m-%d")
-                except ValueError:
+                parsed_due = parse_date(d)
+                if not parsed_due:
                     return {"error": "Formato de data inválido"}, 400
+                task.due_date = parsed_due
             else:
                 task.due_date = None
 
@@ -204,7 +213,9 @@ class TaskController:
             return {"error": "Erro ao deletar"}, 500
 
     @staticmethod
-    def search_tasks(query: str = "", status: str = "", priority_str: str = "", user_id_str: str = "") -> Tuple[List[Dict[str, Any]], int]:
+    def search_tasks(
+        query: str = "", status: str = "", priority_str: str = "", user_id_str: str = ""
+    ) -> Tuple[Any, int]:
         """Filtra tarefas com validação robusta de tipos nos parâmetros."""
         tasks_query = Task.query
 
@@ -252,7 +263,7 @@ class TaskController:
             ~Task.status.in_(("done", "cancelled")),
         ).count()
 
-        completion_rate = round((done / total) * 100, 2) if total > 0 else 0.0
+        completion_rate = calculate_percentage(done, total)
 
         stats = {
             "total": total,

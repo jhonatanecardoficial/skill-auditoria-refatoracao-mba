@@ -1,7 +1,6 @@
 """Controller responsável pelo gerenciamento de Usuários e Autenticação."""
 
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import joinedload
@@ -9,6 +8,12 @@ from sqlalchemy.orm import joinedload
 from database import db
 from models.task import Task
 from models.user import User
+from utils.helpers import (
+    MIN_PASSWORD_LENGTH,
+    sanitize_string,
+    VALID_ROLES,
+    validate_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +57,8 @@ class UserController:
         if not data:
             return {"error": "Dados inválidos"}, 400
 
-        name = data.get("name")
-        email = data.get("email")
+        name = sanitize_string(data.get("name"))
+        email = sanitize_string(data.get("email"))
         password = data.get("password")
         role = data.get("role", "user")
 
@@ -64,22 +69,22 @@ class UserController:
         if not password:
             return {"error": "Senha é obrigatória"}, 400
 
-        if not re.match(r"^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$", email):
+        if not validate_email(email):
             return {"error": "Email inválido"}, 400
 
-        if len(password) < 4:
-            return {"error": "Senha deve ter no mínimo 4 caracteres"}, 400
+        if len(password) < MIN_PASSWORD_LENGTH:
+            return {"error": f"Senha deve ter no mínimo {MIN_PASSWORD_LENGTH} caracteres"}, 400
 
         existing = User.query.filter_by(email=email).first()
         if existing:
             return {"error": "Email já cadastrado"}, 409
 
-        if role not in ("user", "admin", "manager"):
+        if role not in VALID_ROLES:
             return {"error": "Role inválido"}, 400
 
         user = User()
-        user.name = name.strip()
-        user.email = email.strip()
+        user.name = name
+        user.email = email
         user.set_password(password)
         user.role = role
 
@@ -104,11 +109,11 @@ class UserController:
             return {"error": "Dados inválidos"}, 400
 
         if "name" in data:
-            user.name = str(data["name"]).strip()
+            user.name = sanitize_string(str(data["name"])) or ""
 
         if "email" in data:
-            eml = str(data["email"]).strip()
-            if not re.match(r"^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$", eml):
+            eml = sanitize_string(str(data["email"])) or ""
+            if not validate_email(eml):
                 return {"error": "Email inválido"}, 400
 
             existing = User.query.filter_by(email=eml).first()
@@ -118,13 +123,13 @@ class UserController:
 
         if "password" in data:
             pwd = data["password"]
-            if len(pwd) < 4:
+            if len(pwd) < MIN_PASSWORD_LENGTH:
                 return {"error": "Senha muito curta"}, 400
             user.set_password(pwd)
 
         if "role" in data:
             r = data["role"]
-            if r not in ("user", "admin", "manager"):
+            if r not in VALID_ROLES:
                 return {"error": "Role inválido"}, 400
             user.role = r
 
@@ -160,7 +165,7 @@ class UserController:
             return {"error": "Erro ao deletar"}, 500
 
     @staticmethod
-    def get_user_tasks(user_id: int) -> Tuple[List[Dict[str, Any]], int]:
+    def get_user_tasks(user_id: int) -> Tuple[Any, int]:
         """Lista todas as tarefas vinculadas a um usuário."""
         user = db.session.get(User, user_id)
         if not user:
@@ -199,7 +204,7 @@ class UserController:
 
     @staticmethod
     def login(data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
-        """Autentica o usuário com credenciais e retorna token assinado."""
+        """Autentica o usuário com credenciais e preserva o contrato de token da API."""
         if not data:
             return {"error": "Dados inválidos"}, 400
 
@@ -219,5 +224,5 @@ class UserController:
         return {
             "message": "Login realizado com sucesso",
             "user": user.to_dict(),
-            "token": f"jwt-token-{user.id}",
+            "token": f"fake-jwt-token-{user.id}",
         }, 200

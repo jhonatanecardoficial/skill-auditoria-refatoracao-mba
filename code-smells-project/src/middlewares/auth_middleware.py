@@ -71,18 +71,17 @@ def require_admin(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 1. Verificação de restrição de ambiente
+        # 1. Verificação de restrição de ambiente (whitelist estrita)
         env = (
-            current_app.config.get("ENVIRONMENT")
+            current_app.config.get("ENVIRONMENT") or settings.environment
             if current_app
             else settings.environment
         )
-        # Se for explicitamente production, bloqueia
-        if env == "production":
+        if env not in ("development", "testing"):
             return (
                 jsonify(
                     {
-                        "erro": "Operação não permitida no ambiente de produção",
+                        "erro": "Operação não permitida neste ambiente",
                         "sucesso": False,
                     }
                 ),

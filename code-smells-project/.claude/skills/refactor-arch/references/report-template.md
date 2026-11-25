@@ -21,7 +21,7 @@ CRITICAL: <count> | HIGH: <count> | MEDIUM: <count> | LOW: <count>
 
 ## Findings
 
-### [<SEVERITY>] <Nome do Anti-Pattern>
+### [F<N>] [<SEVERITY>] <Nome do Anti-Pattern>
 File: <caminho/arquivo>:<linhas>
 Description: <Descrição clara e contextualizada do problema encontrado>
 Impact: <Impacto arquitetural, de segurança ou de manutenibilidade>

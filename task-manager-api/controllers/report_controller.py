@@ -9,6 +9,12 @@ from database import db
 from models.category import Category
 from models.task import Task
 from models.user import User
+from utils.helpers import (
+    calculate_percentage,
+    DEFAULT_COLOR,
+    is_valid_color,
+    sanitize_string,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +84,7 @@ class ReportController:
                     "user_name": u.name,
                     "total_tasks": total,
                     "completed_tasks": completed,
-                    "completion_rate": round((completed / total) * 100, 2)
-                    if total > 0
-                    else 0.0,
+                    "completion_rate": calculate_percentage(completed, total),
                 }
             )
 
@@ -159,9 +163,7 @@ class ReportController:
                 "cancelled": cancelled,
                 "overdue": overdue,
                 "high_priority": high_priority,
-                "completion_rate": round((done / total) * 100, 2)
-                if total > 0
-                else 0.0,
+                "completion_rate": calculate_percentage(done, total),
             },
         }
 
@@ -180,14 +182,18 @@ class ReportController:
 
     @staticmethod
     def create_category(data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
-        """Cria uma nova categoria."""
-        if not data or not data.get("name"):
+        """Cria uma nova categoria validando nome e cor hexadecimal."""
+        if not data or not sanitize_string(data.get("name")):
             return {"error": "Nome é obrigatório"}, 400
 
+        color = sanitize_string(str(data.get("color", DEFAULT_COLOR))) or DEFAULT_COLOR
+        if not is_valid_color(color):
+            return {"error": "Cor inválida. Use formato hexadecimal #RRGGBB"}, 400
+
         category = Category()
-        category.name = str(data["name"]).strip()
-        category.description = str(data.get("description", "")).strip()
-        category.color = str(data.get("color", "#000000")).strip()
+        category.name = sanitize_string(str(data["name"])) or ""
+        category.description = sanitize_string(str(data.get("description", ""))) or ""
+        category.color = color
 
         try:
             db.session.add(category)
@@ -209,11 +215,14 @@ class ReportController:
             return {"error": "Dados inválidos"}, 400
 
         if "name" in data:
-            cat.name = str(data["name"]).strip()
+            cat.name = sanitize_string(str(data["name"])) or ""
         if "description" in data:
-            cat.description = str(data["description"]).strip()
+            cat.description = sanitize_string(str(data["description"])) or ""
         if "color" in data:
-            cat.color = str(data["color"]).strip()
+            color = sanitize_string(str(data["color"])) or ""
+            if not is_valid_color(color):
+                return {"error": "Cor inválida. Use formato hexadecimal #RRGGBB"}, 400
+            cat.color = color
 
         try:
             db.session.commit()

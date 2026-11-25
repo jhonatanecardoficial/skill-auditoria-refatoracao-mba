@@ -68,6 +68,18 @@ class TestCodeSmellsProject(unittest.TestCase):
         self.assertEqual(res_create.status_code, 201)
         pid = res_create.get_json()["dados"]["id"]
 
+        # Atualizar com categoria inválida deve retornar 400
+        res_put_invalid = self.client.put(
+            f"/produtos/{pid}",
+            json={
+                "nome": "Mousepad RGB XXL",
+                "preco": 149.90,
+                "estoque": 40,
+                "categoria": "categoria-inexistente",
+            },
+        )
+        self.assertEqual(res_put_invalid.status_code, 400)
+
         # Atualizar
         payload_update = {
             "nome": "Mousepad RGB XXL",
@@ -186,7 +198,7 @@ class TestCodeSmellsProject(unittest.TestCase):
         )
         self.assertEqual(res_reset_forbidden.status_code, 403)
 
-        # 4. Login como usuário administrador e reset com sucesso
+        # 4. Login como usuário administrador
         login_admin = self.client.post(
             "/login",
             json={"email": "admin@loja.com", "senha": "admin123"},
@@ -194,6 +206,23 @@ class TestCodeSmellsProject(unittest.TestCase):
         self.assertEqual(login_admin.status_code, 200)
         token_admin = login_admin.get_json()["token"]
 
+        # 4a. Mesmo com token admin válido, ambiente de produção DEVE bloquear (HTTP 403)
+        prod_app = create_app(
+            {
+                "DATABASE_PATH": self.test_db,
+                "ENVIRONMENT": "production",
+                "SECRET_KEY": self.app.config["SECRET_KEY"],
+            }
+        )
+        prod_client = prod_app.test_client()
+        res_reset_prod = prod_client.post(
+            "/admin/reset-db",
+            headers={"Authorization": f"Bearer {token_admin}"},
+        )
+        self.assertEqual(res_reset_prod.status_code, 403)
+        self.assertFalse(res_reset_prod.get_json()["sucesso"])
+
+        # 4b. Em ambiente testing/development com admin autenticado, reset executa com sucesso
         res_reset_ok = self.client.post(
             "/admin/reset-db",
             headers={"Authorization": f"Bearer {token_admin}"},

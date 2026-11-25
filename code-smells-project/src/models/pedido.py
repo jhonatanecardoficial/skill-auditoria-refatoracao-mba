@@ -6,6 +6,13 @@ Implementa controle transacional atômico, prevenção de N+1 queries e queries 
 from typing import Any, Dict, List, Optional
 from src.database.connection import get_db
 
+FAIXA_DESCONTO_ALTO = 10000.0
+TAXA_DESCONTO_ALTO = 0.10
+FAIXA_DESCONTO_MEDIO = 5000.0
+TAXA_DESCONTO_MEDIO = 0.05
+FAIXA_DESCONTO_BAIXO = 1000.0
+TAXA_DESCONTO_BAIXO = 0.02
+
 
 class PedidoModel:
     """Repositório e operações de negócio/persistência para Pedidos e Itens."""
@@ -232,12 +239,12 @@ class PedidoModel:
         cancelados = row["cancelados"] or 0
 
         desconto = 0.0
-        if faturamento > 10000:
-            desconto = faturamento * 0.1
-        elif faturamento > 5000:
-            desconto = faturamento * 0.05
-        elif faturamento > 1000:
-            desconto = faturamento * 0.02
+        if faturamento > FAIXA_DESCONTO_ALTO:
+            desconto = faturamento * TAXA_DESCONTO_ALTO
+        elif faturamento > FAIXA_DESCONTO_MEDIO:
+            desconto = faturamento * TAXA_DESCONTO_MEDIO
+        elif faturamento > FAIXA_DESCONTO_BAIXO:
+            desconto = faturamento * TAXA_DESCONTO_BAIXO
 
         ticket_medio = (
             round(faturamento / total_pedidos, 2) if total_pedidos > 0 else 0.0

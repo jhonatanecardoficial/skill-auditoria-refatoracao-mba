@@ -143,6 +143,7 @@ class TestTaskManagerAPI(unittest.TestCase):
         )
         self.assertEqual(res_login.status_code, 200)
         self.assertIn("token", res_login.get_json())
+        self.assertTrue(res_login.get_json()["token"].startswith("fake-jwt-token-"))
 
         # Login com credenciais inválidas
         res_bad_login = self.client.post(
@@ -180,6 +181,13 @@ class TestTaskManagerAPI(unittest.TestCase):
         res_bad_uid = self.client.get("/tasks/search?user_id=invalido")
         self.assertEqual(res_bad_uid.status_code, 400)
         self.assertIn("error", res_bad_uid.get_json())
+
+        # 1b. Validação integrada de helper is_valid_color na rota POST /categories
+        res_bad_color = self.client.post(
+            "/categories", json={"name": "Cat Cor Ruim", "color": "vermelho"}
+        )
+        self.assertEqual(res_bad_color.status_code, 400)
+        self.assertIn("error", res_bad_color.get_json())
 
         # 2. Teste do serviço de notificação desacoplado
         from services.notification_service import NotificationService

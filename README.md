@@ -13,12 +13,12 @@ Repositório público com a entrega completa do desafio técnico de criação de
   - `ecommerce-api-legacy/.claude/skills/refactor-arch/`
   - `task-manager-api/.claude/skills/refactor-arch/`
 - **Relatórios de Auditoria da Fase 2:**
-  - `reports/audit-project-1.md` (14 achados: 5 CRITICAL, 3 HIGH, 3 MEDIUM, 3 LOW)
-  - `reports/audit-project-2.md` (10 achados: 3 CRITICAL, 3 HIGH, 2 MEDIUM, 2 LOW)
-  - `reports/audit-project-3.md` (11 achados: 3 CRITICAL, 2 HIGH, 4 MEDIUM, 2 LOW)
+  - `reports/audit-project-1.md` (14 achados `[F1]`–`[F14]`: 5 CRITICAL, 3 HIGH, 3 MEDIUM, 3 LOW)
+  - `reports/audit-project-2.md` (10 achados `[F1]`–`[F10]`: 3 CRITICAL, 3 HIGH, 2 MEDIUM, 2 LOW)
+  - `reports/audit-project-3.md` (11 achados `[F1]`–`[F11]`: 3 CRITICAL, 2 HIGH, 4 MEDIUM, 2 LOW)
 - **Finding Closure Gate:** Todos os 35 achados levantados na Fase 2 foram integralmente sanados na Fase 3.
-  - Endpoints vulneráveis de execução arbitrária (`/admin/query`) foram **completamente removidos** da tabela de rotas (retornando 404).
-  - Endpoints administrativos destrutivos (`/admin/reset-db`) foram protegidos por token assinado Bearer com verificação de papel (`tipo == "admin"`) e bloqueio estrito em ambiente de produção.
+  - Endpoints vulneráveis de execução SQL arbitrária (`/admin/query`) foram **completamente removidos** da tabela de rotas (retornando HTTP 404).
+  - Endpoints administrativos destrutivos (`/admin/reset-db`) foram protegidos por token assinado Bearer com verificação de papel (`tipo == "admin"`) e whitelist estrita de ambiente (`ENVIRONMENT in ("development", "testing")`).
 - **Suíte de Testes Automatizados:** `tests/run_all_tests.py` (16 cenários e endpoints testados, 100% aprovados)
 - **Documentação de Testes:** `TESTES.md`
 
@@ -33,11 +33,11 @@ skill-auditoria-refatoracao-mba/
 │
 ├── code-smells-project/                   # Projeto 1: Python/Flask (API de E-commerce)
 │   ├── .claude/skills/refactor-arch/      # Custom Skill refactor-arch (Fases 1, 2 e 3)
-│   │   ├── SKILL.md                       # Fluxo com Finding Closure Gate
+│   │   ├── SKILL.md                       # Fluxo em 3 fases com Finding Closure Gate
 │   │   └── references/
 │   │       ├── project-analysis.md        # Heurísticas de detecção de stack
 │   │       ├── anti-patterns-catalog.md   # Catálogo de 12 anti-patterns + APIs obsoletas
-│   │       ├── report-template.md         # Template padronizado de auditoria com regras de soma
+│   │       ├── report-template.md         # Template padronizado com IDs [F<N>] e soma exata
 │   │       ├── architecture-guidelines.md # Diretrizes canônicas do padrão MVC (SoC estrito)
 │   │       └── refactoring-playbook.md    # 12 padrões de transformação com antes/depois
 │   ├── src/                               # Arquitetura MVC refatorada
@@ -46,10 +46,10 @@ skill-auditoria-refatoracao-mba/
 │   │   ├── models/                        # Camada de dados pura (Zero SQL nos controllers)
 │   │   │   ├── produto.py                 # Consultas parametrizadas
 │   │   │   ├── usuario.py                 # Hashing Werkzeug e proteção de senhas
-│   │   │   ├── pedido.py                  # Transações atômicas e prevenção de N+1
-│   │   │   └── health.py                  # Abstração de métricas de conectividade
+│   │   │   ├── pedido.py                  # Transações atômicas, constantes e zero N+1
+│   │   │   └── health.py                  # HealthModel (abstração de métricas)
 │   │   ├── controllers/                   # Orquestração HTTP e regras de negócio
-│   │   │   ├── produto_controller.py      # Validação de queries e constraints
+│   │   │   ├── produto_controller.py      # Validação de queries e constraints nomeadas
 │   │   │   ├── usuario_controller.py      # Autenticação com emissão de Bearer token
 │   │   │   ├── pedido_controller.py
 │   │   │   ├── relatorio_controller.py
@@ -57,14 +57,18 @@ skill-auditoria-refatoracao-mba/
 │   │   │   └── admin_controller.py        # Reset transacional seguro
 │   │   ├── services/                      # Serviços de domínio desacoplados
 │   │   │   ├── pedido_service.py          # Regras comerciais de pedidos
-│   │   │   └── notification_service.py    # Despacho de notificações
+│   │   │   └── notification_service.py    # Despacho estruturado de notificações
 │   │   ├── routes/                        # Blueprints modulares (sem /admin/query)
 │   │   │   └── admin_routes.py            # /admin/reset-db protegido por @require_admin
-│   │   └── middlewares/                   # Middlewares globais
-│   │       ├── auth_middleware.py         # @require_admin e validação de tokens itsdangerous
-│   │       └── error_handler.py           # Tratamento global sem vazamento de stack trace
+│   │   ├── middlewares/                   # Middlewares globais
+│   │   │   ├── auth_middleware.py         # @require_admin e tokens itsdangerous
+│   │   │   └── error_handler.py           # Tratamento global sem vazamento de stack trace
+│   │   └── app.py                         # Application Factory
 │   ├── app.py                             # Entrypoint da aplicação
 │   ├── controllers.py                     # Shim de compatibilidade retroativa
+│   ├── models.py                          # Shim de compatibilidade retroativa
+│   ├── database.py                        # Shim de compatibilidade retroativa
+│   ├── README.md
 │   └── requirements.txt
 │
 ├── ecommerce-api-legacy/                  # Projeto 2: Node.js/Express (LMS API com checkout)
@@ -74,14 +78,14 @@ skill-auditoria-refatoracao-mba/
 │   │   ├── database/db.js                 # Inicialização com seed hasheada (hashPassword)
 │   │   ├── services/security.service.js   # Hashing PBKDF2 e mascaramento de cartão (PCI-DSS)
 │   │   ├── models/                        # Camada de persistência relacional
-│   │   │   ├── user.model.js              # Deleção em cascata para evitar registros órfãos
+│   │   │   ├── user.model.js              # Deleção em lote relacional sem N+1 deletes
 │   │   │   ├── course.model.js
 │   │   │   ├── enrollment.model.js
 │   │   │   ├── payment.model.js
 │   │   │   ├── report.model.js            # Agregação SQL isolada (sem SQL no controller)
 │   │   │   └── audit.model.js
 │   │   ├── controllers/
-│   │   │   ├── checkout.controller.js     # Variáveis semânticas e async/await sem callback hell
+│   │   │   ├── checkout.controller.js     # Variáveis semânticas, crypto fallback e async/await
 │   │   │   ├── report.controller.js       # Relatório financeiro via ReportModel
 │   │   │   └── user.controller.js
 │   │   ├── routes/                        # Express Routers desacoplados
@@ -90,16 +94,18 @@ skill-auditoria-refatoracao-mba/
 │   │   ├── utils.js                       # BoundedCache (max 500 itens) sem memory leak
 │   │   └── app.js                         # Composition root do Express
 │   ├── api.http
-│   └── package.json
+│   ├── package.json
+│   ├── package-lock.json
+│   └── README.md
 │
 ├── task-manager-api/                      # Projeto 3: Python/Flask + SQLAlchemy (Task Manager)
 │   ├── .claude/skills/refactor-arch/      # Cópia idêntica da Custom Skill (SHA-256 verificado)
 │   ├── config/
 │   │   └── settings.py                    # Classe Config com SMTP e DB via os.getenv
 │   ├── controllers/                       # Camada Controller desacoplada das rotas
-│   │   ├── task_controller.py             # Validação estrita de query params (HTTP 400)
-│   │   ├── user_controller.py             # Login com token e to_dict() seguro
-│   │   └── report_controller.py           # Agregações SQL e contagens eager sem N+1
+│   │   ├── task_controller.py             # Validação de query params e reuso de helpers
+│   │   ├── user_controller.py             # Login com contrato original e to_dict() seguro
+│   │   └── report_controller.py           # Agregações SQL, cor hexadecimal e zero N+1
 │   ├── middlewares/
 │   │   └── error_handler.py               # Manipulador centralizado sem vazamento de exceção
 │   ├── models/                            # Hashing PBKDF2, SQLAlchemy 2.0 e sem senhas expostas
@@ -107,10 +113,11 @@ skill-auditoria-refatoracao-mba/
 │   ├── services/
 │   │   └── notification_service.py        # SMTP desacoplado e sem senha hardcoded
 │   ├── utils/
-│   │   └── helpers.py                     # Funções limpas, sem imports mortos e sem bare except
+│   │   └── helpers.py                     # Helpers limpos, sem imports mortos e integrados aos controllers
 │   ├── app.py                             # Composition root desacoplado
 │   ├── database.py
 │   ├── seed.py                            # População inicial sem APIs depreciadas
+│   ├── README.md
 │   └── requirements.txt
 │
 ├── reports/                               # Relatórios oficiais de auditoria (Fase 2)
@@ -120,8 +127,8 @@ skill-auditoria-refatoracao-mba/
 │
 └── tests/                                 # Suíte unificada de testes automatizados
     ├── run_all_tests.py                   # Orquestrador unificado dos 3 projetos
-    ├── test_code_smells_project.py        # 5 suítes (inclui segurança /admin e query params)
-    ├── test_ecommerce_api.js              # 6 cenários E2E (checkout, report, cascade, pci-dss)
+    ├── test_code_smells_project.py        # 5 suítes (inclui segurança /admin e trava produção)
+    ├── test_ecommerce_api.js              # 6 cenários E2E (checkout, report, cascade, PCI-DSS)
     └── test_task_manager_api.py           # 5 suítes (inclui controllers, helpers e query filters)
 ```
 
@@ -140,7 +147,7 @@ Antes da construção e execução da skill, foi conduzida uma análise manual a
 | **CRITICAL** | SQL Injection Generalizado | `models.py:28, 48-50, 58, 109, 140, 149, 158, 188, 280, 289` | Interpolação direta de strings em queries SQL. Permite extração arbitrária de dados e bypass total de autenticação. |
 | **CRITICAL** | Execução Arbitrária de SQL em Endpoint Administrativo | `app.py:59-78` | Rota `/admin/query` recebe comandos SQL do cliente e executa diretamente no banco (`cursor.execute(query)`), configurando um backdoor grave. |
 | **CRITICAL** | Endpoint Destrutivo de Reset de Banco Sem Autenticação | `app.py:47-58` | Rota `/admin/reset-db` apaga todas as tabelas do sistema sem checagem de permissão ou token. |
-| **CRITICAL** | Credenciais Hardcoded e Vazamento de Dados Sensíveis | `app.py:7`, `controllers.py:287-290` | `SECRET_KEY = "minha-chave-super-secreta-123"` gravada em código; rota `/health` vaza secret_key e caminhos internos no JSON. |
+| **CRITICAL** | Credenciais Hardcoded e Vazamento de Dados Sensíveis | `app.py:7`, `controllers.py:287-290` | `SECRET_KEY = "minha-chave-super-secreta-123"` gravada em código; rota `/health` vaza `secret_key` e caminhos internos no JSON. |
 | **CRITICAL** | Senhas Armazenadas e Retornadas em Texto Claro | `models.py:83, 99, 110, 128` | Senhas salvas sem hashing e expostas no payload de retorno da API. |
 | **HIGH** | God Module / Violação Total de SRP | `models.py:1-314` | Módulo acumula persistência, conexões, regras de estoque, processamento de pedidos e relatórios de 4 domínios diferentes. |
 | **HIGH** | Lógica de Negócio e Notificações em Controllers | `controllers.py:208-210, 247-251` | Handlers HTTP concentram prints de SMS/email e manipulação de estoque misturados ao transporte. |
@@ -148,7 +155,7 @@ Antes da construção e execução da skill, foi conduzida uma análise manual a
 | **MEDIUM** | N+1 Query Problem em Pedidos e Itens | `models.py:177-200, 219-232` | Ao listar pedidos, dispara uma query adicional por item e por produto ($1 + P \times (1 + I)$ queries). |
 | **MEDIUM** | Ausência de Tratamento Centralizado de Erros | `controllers.py:10-12, 60-63, 143-145` | Múltiplos blocos `try/except` repetitivos retornando `str(e)`, vazando detalhes internos no erro 500. |
 | **MEDIUM** | Conversões Ingênuas de Query Parameters sem Validação | `controllers.py:114-115` | `float(request.args.get('preco_min'))` sem tratamento de exceção causa crash 500 em inputs malformados. |
-| **LOW** | Magic Numbers e Strings Sem Constantes | `controllers.py:47, 49, 52, models.py:122` | Limites `len(nome) < 2` e `len(nome) > 200` fixados como literais soltos no código. |
+| **LOW** | Magic Numbers e Strings Sem Constantes | `controllers.py:47, 49, 52`, `models.py:122, 257-262` | Limites `len(nome) < 2`, `len(nome) > 200` e faixas de desconto (`10000`, `5000`, `1000`) fixados como literais soltos no código. |
 | **LOW** | Logging Não Estruturado com Concatenação | `controllers.py:8, 57, 106, 208-210` | Uso de `print("Texto " + str(valor))` em vez de biblioteca padronizada de logs (`logging`). |
 | **LOW** | Roteamento Procedural Manual | `app.py:11-30` | Registro sequencial de rotas com `add_url_rule` sem agrupamento por recurso ou Blueprints. |
 
@@ -191,9 +198,9 @@ Antes da construção e execução da skill, foi conduzida uma análise manual a
 
 ## Seção B: Construção da Skill (`refactor-arch`)
 
-### 1. Decisões de Design e Arquitetura da Skill
+### 1. Decisões de Design, Estrutura da Skill e *Finding Closure Gate*
 
-A skill `refactor-arch` implementa um pipeline em **3 fases sequenciais e determinísticas**, com governança estrita de aprovação humana e fechamento obrigatório de achados:
+A skill `refactor-arch` foi estruturada seguindo o modelo modular do Claude Code (`.claude/skills/refactor-arch/`), separando o fluxo orquestrador (`SKILL.md`) das bases de conhecimento especializadas em `references/`. Essa separação mantém o prompt principal enxuto e permite evoluir regras, catálogos e exemplos sem contaminar a lógica de controle das fases:
 
 ```mermaid
 flowchart TD
@@ -213,20 +220,51 @@ flowchart TD
     N --> O["Fim: Aplicação Refatorada, Segura e 100% Funcional"]
 ```
 
-#### Catálogo de Referências da Skill:
+#### Áreas de Conhecimento Cobertas em `references/`:
 1. `references/project-analysis.md`: Heurísticas de inspeção estática para Python (Flask/FastAPI/Django), Node.js (Express/Nest), Go e Java.
-2. `references/anti-patterns-catalog.md`: Catálogo padronizado com **12 anti-patterns** detalhados com severidade, sinais de detecção, arquivos, impacto e recomendações acionáveis.
-3. `references/report-template.md`: Template obrigatório com ordenação estrita por severidade (`CRITICAL` → `LOW`), consistência aritmética de sumário (`CRITICAL + HIGH + MEDIUM + LOW == Total`) e cotas mínimas.
-4. `references/architecture-guidelines.md`: Diretrizes formais do padrão MVC (SoC estrito: Controllers nunca executam SQL; Models isolam persistência; Middlewares tratam erros sem vazar stack trace).
-5. `references/refactoring-playbook.md`: **12 padrões concretos de transformação** com código *Antes* e *Depois*, incluindo:
-   - **Padrão 11:** Remoção de Backdoors SQL e Proteção de Endpoints Administrativos Destrutivos.
-   - **Padrão 12:** Extração de Fat Routes e Migração Integral para MVC em Projetos Parcialmente Organizados.
+2. `references/anti-patterns-catalog.md`: Catálogo padronizado com **12 anti-patterns** e regras de detecção de **APIs deprecated** com equivalentes modernos.
+3. `references/report-template.md`: Template obrigatório com identificação única (`[F1]`, `[F2]`...), ordenação por severidade (`CRITICAL` → `LOW`), consistência aritmética exata (`CRITICAL + HIGH + MEDIUM + LOW == Total`) e cotas mínimas.
+4. `references/architecture-guidelines.md`: Regras canônicas do padrão MVC alvo (Controllers nunca executam SQL; Models isolam persistência; Middlewares padronizam erros sem vazar stack trace).
+5. `references/refactoring-playbook.md`: **12 padrões concretos de transformação** com código *Antes* e *Depois*, incluindo **Padrão 11** (Remoção de Backdoors SQL e Proteção de Endpoints Administrativos) e **Padrão 12** (Extração de *Fat Routes* em projetos parcialmente organizados).
 
-### 2. O Finding Closure Gate (Mecanismo de Não-Regressão)
-A versão aprimorada da skill introduziu o **Finding Closure Gate**:
-- Uma regra mandatória que exige que **100% dos achados identificados na Fase 2 sejam efetivamente corrigidos na Fase 3**.
-- Impede terminantemente a prática de apenas "relocar" um código vulnerável para um novo diretório sem sanar o problema de segurança.
-- Assegura que endpoints de execução SQL arbitrária (`/admin/query`) sejam removidos da tabela de rotas (respondendo HTTP 404 Not Found) e que rotas de manutenção destrutiva (`/admin/reset-db`) exijam autenticação forte, validação de papel de administrador e restrição a ambientes de desenvolvimento/teste.
+Adicionalmente, a Fase 3 impõe o **Finding Closure Gate**: verificação 1-para-1 comprovando que todos os achados levantados na Fase 2 (`[F1]`..`[Fn]`) foram efetivamente remediados, proibindo apenas relocar um endpoint vulnerável para outro módulo sem corrigi-lo.
+
+### 2. Quais Anti-Patterns Foram Incluídos no Catálogo e Por Quê
+
+O catálogo (`references/anti-patterns-catalog.md`) reúne **12 anti-patterns** calibrados diretamente a partir da análise manual dos 3 projetos e das regras de MVC/SOLID, cobrindo segurança, arquitetura, performance e manutenibilidade:
+
+| # | Anti-Pattern | Severidade | Por que foi incluído no catálogo |
+| :---: | :--- | :---: | :--- |
+| **1** | **SQL Injection** | `CRITICAL` | Previne interpolação de strings em queries SQL detectada massivamente no `code-smells-project`. |
+| **2** | **God Class / God Module** | `CRITICAL` | Ataca arquivos monolíticos (`models.py` e `AppManager.js`) que violam o Princípio da Responsabilidade Única (SRP). |
+| **3** | **Hardcoded Secrets and Credentials** | `CRITICAL` | Captura chaves, senhas de banco e credenciais SMTP em código (`app.py`, `utils.js`, `notification_service.py`). |
+| **4** | **Weak Cryptography and Password Exposure** | `CRITICAL` | Identifica texto plano, MD5 sem salt, `badCrypto` em Base64, vazamento de senhas em `to_dict()` e cartões em logs (PCI-DSS). |
+| **5** | **Arbitrary SQL Execution Endpoints** | `CRITICAL` | Garante a detecção e eliminação de backdoors administrativos (`/admin/query`) e endpoints destrutivos abertos (`/admin/reset-db`). |
+| **6** | **Business Logic in Controllers / Fat Routes** | `HIGH` | Separa regras de domínio, cálculos e ORM acoplados em rotas (`controllers.py`, `routes/task_routes.py`). |
+| **7** | **Tight Coupling & Callback Hell / Spaghetti Async** | `HIGH` | Detecta pirâmides de callbacks no Node.js (`AppManager.js`) e acoplamento rígido a estado global mutável. |
+| **8** | **N+1 Query Problem** | `MEDIUM` | Corrige loops disparando queries por item em listagens e relatórios nos 3 projetos. |
+| **9** | **Deprecated APIs and Outdated Patterns** | `MEDIUM` | Detecta `datetime.utcnow()` (Python 3.12+) e `Model.query.get(id)` (SQLAlchemy 2.0) sugerindo substitutos canônicos. |
+| **10** | **Missing Centralized Error Handling & Bare Excepts** | `MEDIUM` | Elimina blocos `except:` nus e padroniza handlers globais de erro sem expor detalhes internos. |
+| **11** | **Magic Numbers and Poor Naming** | `LOW` | Combate identificadores crípticos (`u`, `e`, `cid`, `cc`) e literais soltos (`10000`, `5000`, `4`). |
+| **12** | **Missing Route Parameter Validation & Info Disclosure** | `MEDIUM` | Impede crashes 500 por query strings inválidas (`preco_min=abc`, `priority=abc`) e vazamento de stack traces. |
+
+### 3. Como Garantimos que a Skill é Agnóstica de Tecnologia
+
+- **Heurísticas baseadas em comportamento arquitetural:** Os sinais de detecção descrevem padrões semânticos universais (ex.: consulta executada dentro de laço `for`, credencial literal em atribuição de configuração, método HTTP contendo transação SQL), complementados por manifestos específicos por ecossistema apenas na camada de detecção (`project-analysis.md`).
+- **Diretrizes estruturais equivalentes entre stacks:** `architecture-guidelines.md` define as mesmas 6 responsabilidades (`config/`, `database/`, `models/`, `controllers/`, `routes|views/`, `middlewares/`) mapeáveis tanto para **Python/Flask** (Blueprints, `werkzeug.security`, SQLAlchemy/`sqlite3`) quanto para **Node.js/Express** (Routers, `crypto.pbkdf2Sync`, Promises/`async/await`), além de orientar FastAPI, Django, NestJS, Go e Java.
+- **Adaptação ao nível de maturidade do projeto:** O playbook distingue monólitos desestruturados (**Padrão 2**) de projetos parcialmente organizados com *Fat Routes* (**Padrão 12**), evitando reescritas destrutivas e preservando 100% os contratos HTTP/JSON existentes.
+- **Replicabilidade comprovada:** As pastas `.claude/skills/refactor-arch/` nos 3 projetos possuem conteúdo idêntico (validado por SHA-256) sem nenhuma referência hardcoded a um projeto específico.
+
+### 4. Desafios Encontrados e Soluções Implementadas
+
+- **Desafio 1 — Endpoints administrativos vulneráveis apenas "movidos" na primeira versão:** Inicialmente, `/admin/query` e `/admin/reset-db` haviam sido extraídos para `admin_routes.py` sem eliminar o risco nem exigir autenticação.
+  - *Solução:* Criação do **Padrão 11** no playbook e do **Finding Closure Gate** no `SKILL.md`, remoção total de `/admin/query` (retornando `404`) e proteção de `/admin/reset-db` via `@require_admin` (`itsdangerous` Bearer token + papel `admin` + whitelist estrita de ambiente `development`/`testing`).
+- **Desafio 2 — Retrocompatibilidade de autenticação com seeds legados:** Migrar senhas de texto claro ou MD5 para PBKDF2/scrypt quebrava o login de usuários criados antes da refatoração.
+  - *Solução:* Implementação de verificação com fallback legado e promoção automática para hash PBKDF2 seguro no primeiro login válido (`UsuarioModel.autenticar` e `User.check_password`).
+- **Desafio 3 — Inicialização assíncrona no SQLite `:memory:` em Node.js:** Ao modularizar `AppManager.js`, as queries do seed poderiam ocorrer em paralelo antes da criação das tabelas.
+  - *Solução:* Uso de `db.serialize()` no `initDb()` com ativação de `PRAGMA foreign_keys = ON;`, seed já hasheada com `hashPassword('123')` e encapsulamento de `dbGet`/`dbAll`/`dbRun` em Promises.
+- **Desafio 4 — Isolamento de conexões de banco em testes no Flask:** O singleton global de conexão impedia injetar bancos de teste limpos entre suítes.
+  - *Solução:* Vinculação da conexão ao `flask.g` respeitando `current_app.config.get("DATABASE_PATH")` e propagação explícita de `ENVIRONMENT` no `create_app()`.
 
 ---
 
@@ -255,23 +293,25 @@ code-smells-project/
 DEPOIS (MVC Seguro e Conforme):
 code-smells-project/
 ├── app.py                   # Entrypoint enxuto delegando para src/app.py
-├── controllers.py           # Shim de compatibilidade retroativa
+├── controllers.py           # Shim de compatibilidade retroativa (sem executar_query)
+├── models.py                # Shim de compatibilidade retroativa
+├── database.py              # Shim de compatibilidade retroativa
 ├── requirements.txt
 └── src/
     ├── config/settings.py           # Configurações imutáveis carregadas via os.getenv
-    ├── database/connection.py       # Context manager de conexão com suporte a PRAGMA foreign_keys
+    ├── database/connection.py       # Context manager de conexão com PRAGMA foreign_keys = ON
     ├── models/                      # Camada de Persistência pura
     │   ├── produto.py               # Consultas parametrizadas com placeholders ?
     │   ├── usuario.py               # Hashing Werkzeug seguro e omissão de senhas
-    │   ├── pedido.py                # Transações atômicas e queries estruturadas sem N+1
+    │   ├── pedido.py                # Transações atômicas, constantes nomeadas e zero N+1
     │   └── health.py                # HealthModel (Zero SQL nos controllers)
     ├── controllers/                 # Camada Controller orquestradora
-    │   ├── produto_controller.py    # Validação de queries numéricas (preco_min/preco_max)
+    │   ├── produto_controller.py    # Validação de queries numéricas e categorias
     │   ├── usuario_controller.py    # Emissão de token assinado no login
     │   ├── pedido_controller.py     # Delegação de regras de negócio para PedidoService
     │   ├── relatorio_controller.py  # Relatórios agregados
     │   ├── health_controller.py     # Diagnóstico seguro sem vazar secret_key
-    │   └── admin_controller.py     # Reset protegido transacional (DELETE seguro)
+    │   └── admin_controller.py      # Reset protegido transacional (DELETE seguro)
     ├── services/                    # Camada de Serviços de Domínio
     │   ├── pedido_service.py        # Validação de limites comerciais e orquestração
     │   └── notification_service.py  # Despacho estruturado de notificações
@@ -308,14 +348,14 @@ ecommerce-api-legacy/
 │   ├── database/db.js               # SQLite serializado com senha de seed hasheada via PBKDF2
 │   ├── services/security.service.js # Hashing com salt e mascaramento de cartão em log (PCI-DSS)
 │   ├── models/                      # Camada Model
-│   │   ├── user.model.js            # Deleção consistente em cascata
+│   │   ├── user.model.js            # Deleção em lote relacional sem N+1 deletes
 │   │   ├── course.model.js
 │   │   ├── enrollment.model.js
 │   │   ├── payment.model.js
 │   │   ├── report.model.js          # Agregação SQL sem loop N+1 (Zero SQL nos controllers)
 │   │   └── audit.model.js
 │   ├── controllers/                 # Camada Controller
-│   │   ├── checkout.controller.js   # Nomes semânticos e async/await sem callback hell
+│   │   ├── checkout.controller.js   # Nomes semânticos, crypto fallback e async/await
 │   │   ├── report.controller.js     # Formatação de relatório financeiro via ReportModel
 │   │   └── user.controller.js
 │   ├── routes/                      # Roteamento modular Express
@@ -328,11 +368,11 @@ ecommerce-api-legacy/
 ```text
 ANTES:
 task-manager-api/
-├── app.py                   # Hardcoded SECRET_KEY e rotas com SQL direto
+├── app.py                   # Hardcoded SECRET_KEY e error handling inline
 ├── database.py
 ├── seed.py                  # datetime.utcnow() obsoleto
 ├── models/
-│   ├── user.py              # MD5 inseguro e senha exposta em to_dict()
+│   ├── user.py              # MD5 inseguro, import hashlib interno e senha exposta em to_dict()
 │   ├── task.py              # datetime.utcnow() e condicionais redundantes
 │   └── category.py
 ├── routes/                  # Fat Routes (rotas acumulando regras de negócio e ORM)
@@ -350,13 +390,13 @@ task-manager-api/
 ├── config/
 │   └── settings.py          # Classe Config centralizada com leitura de env vars e SMTP
 ├── controllers/             # Camada Controller desacoplada
-│   ├── task_controller.py   # Validação de queries de busca (HTTP 400 em vez de crash 500)
-│   ├── user_controller.py   # Login, gestão de contas e to_dict() sem senha
-│   └── report_controller.py # Agregações SQL e contagens eager sem N+1
+│   ├── task_controller.py   # Validação de queries de busca e reuso de helpers
+│   ├── user_controller.py   # Login com token compatível, gestão de contas e to_dict() sem senha
+│   └── report_controller.py # Agregações SQL, validação de cor e contagens eager sem N+1
 ├── middlewares/
 │   └── error_handler.py     # Middleware centralizado para HTTPException e exceções inesperadas
 ├── models/
-│   ├── user.py              # PBKDF2/scrypt, remoção de senha em to_dict() e is_admin simplificado
+│   ├── user.py              # PBKDF2/scrypt, remoção de senha em to_dict() e PEP 8
 │   ├── task.py              # Timestamps timezone-aware e simplificação de validações
 │   └── category.py
 ├── routes/                  # Blueprints enxutos delegando exclusivamente aos Controllers
@@ -366,7 +406,7 @@ task-manager-api/
 ├── services/
 │   └── notification_service.py # SMTP seguro desacoplado lendo credenciais de settings.py
 └── utils/
-    └── helpers.py           # Funções utilitárias limpas, sem imports mortos e com exceções tipadas
+    └── helpers.py           # Helpers limpos, sem imports mortos e reutilizados pelos controllers
 ```
 
 ### 3. Checklists de Validação
@@ -376,17 +416,18 @@ task-manager-api/
 - [x] Framework detectado corretamente (Flask 3.1.1)
 - [x] Domínio da aplicação descrito corretamente (E-commerce API)
 - [x] Número de arquivos analisados condiz com a realidade (4 arquivos originais)
-- [x] Relatório segue o template definido nos arquivos de referência
+- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F14]`)
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
 - [x] Mínimo de 5 findings identificados (14 encontrados)
+- [x] Detecção de APIs deprecated incluída (se aplicável — verificada sem ocorrências legadas ativas)
 - [x] Skill pausa e pede confirmação antes da Fase 3
 - [x] Estrutura de diretórios segue padrão MVC
 - [x] Configuração extraída para módulo de config (sem hardcoded)
 - [x] Models criados para abstrair dados (Zero SQL em controllers)
 - [x] Views/Routes separadas para roteamento
 - [x] Controllers concentram o fluxo da aplicação
-- [x] Finding Closure Gate: `/admin/query` removido (404) e `/admin/reset-db` protegido por `@require_admin`
+- [x] Finding Closure Gate: `/admin/query` removido (404) e `/admin/reset-db` protegido por `@require_admin` + ambiente
 - [x] Error handling centralizado sem vazamento de stack trace
 - [x] Entry point claro
 - [x] Aplicação inicia sem erros
@@ -397,10 +438,11 @@ task-manager-api/
 - [x] Framework detectado corretamente (Express 4.18)
 - [x] Domínio da aplicação descrito corretamente (LMS E-commerce API com checkout)
 - [x] Número de arquivos analisados condiz com a realidade (3 arquivos originais)
-- [x] Relatório segue o template definido nos arquivos de referência
+- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F10]`)
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
 - [x] Mínimo de 5 findings identificados (10 encontrados)
+- [x] Detecção de APIs deprecated incluída (se aplicável — verificada migração para Promises/`async/await`)
 - [x] Skill pausa e pede confirmação antes da Fase 3
 - [x] Estrutura de diretórios segue padrão MVC
 - [x] Configuração extraída para módulo de config (sem hardcoded)
@@ -408,7 +450,7 @@ task-manager-api/
 - [x] Views/Routes separadas para roteamento
 - [x] Controllers concentram o fluxo da aplicação
 - [x] Callback Hell eliminado com Promises e `async/await`
-- [x] Senhas de seed hasheadas com salt PBKDF2
+- [x] Senhas de seed hasheadas com salt PBKDF2 e deleção em lote sem N+1
 - [x] Cache global mutável substituído por `BoundedCache`
 - [x] Error handling centralizado
 - [x] Entry point claro
@@ -420,7 +462,7 @@ task-manager-api/
 - [x] Framework detectado corretamente (Flask + SQLAlchemy)
 - [x] Domínio da aplicação descrito corretamente (Task Manager API)
 - [x] Número de arquivos analisados condiz com a realidade (8 arquivos originais)
-- [x] Relatório segue o template definido nos arquivos de referência
+- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F11]`)
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
 - [x] Mínimo de 5 findings identificados (11 encontrados, cumprindo $\ge 2$ MEDIUM)
@@ -430,7 +472,7 @@ task-manager-api/
 - [x] Configuração extraída para módulo de config (sem hardcoded)
 - [x] Models criados para abstrair dados
 - [x] Views/Routes separadas delegando exclusivamente para Controllers
-- [x] Limpeza completa de `helpers.py` (remoção de 5 imports mortos e bare excepts)
+- [x] Limpeza completa de `helpers.py` (remoção de 5 imports mortos e bare excepts) e reuso nos Controllers
 - [x] Proteção e desacoplamento de credenciais SMTP no `NotificationService`
 - [x] Error handling centralizado
 - [x] Entry point claro
@@ -447,7 +489,7 @@ DIRETÓRIO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba
 ....Banco de dados resetado com autorização administrativa.
 .
 ----------------------------------------------------------------------
-Ran 5 tests in 1.185s
+Ran 5 tests in 1.167s
 
 OK
 
@@ -482,7 +524,7 @@ DIRETÓRIO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
 .....
 ----------------------------------------------------------------------
-Ran 5 tests in 0.710s
+Ran 5 tests in 0.744s
 
 OK
 
@@ -492,6 +534,12 @@ OK
 🎉 TODOS OS TESTES DOS 3 PROJETOS FORAM APROVADOS!
 =======================================================
 ```
+
+### 5. Observações sobre o Comportamento da Skill em Stacks Diferentes
+
+1. **Monólito Python/Flask (`code-smells-project`):** A Fase 1 detectou imediatamente a ausência de camadas e a mistura entre acesso ao `sqlite3` e handlers Flask. O principal ganho veio da aplicação conjunta do **Padrão 1** (queries parametrizadas), **Padrão 2** (decomposição em `models/`, `controllers/`, `routes/` e `services/`) e **Padrão 11** (*Finding Closure Gate*), garantindo que nenhum endpoint administrativo inseguro sobrevivesse à migração de pastas.
+2. **Monólito Node.js/Express (`ecommerce-api-legacy`):** Mesmo utilizando exatamente a mesma pasta `.claude/skills/refactor-arch/`, a skill adaptou o alvo MVC para módulos CommonJS, converteu callbacks aninhados em `async/await` (**Padrão 6**), isolou o SQL de relatórios em `ReportModel` (**Padrão 7**), aplicou `crypto.pbkdf2Sync` e mascaramento PCI-DSS (**Padrão 4**) e preservou o contrato exato consumido por `api.http`.
+3. **Projeto Python/Flask + SQLAlchemy Parcialmente Organizado (`task-manager-api`):** Como o projeto já possuía diretórios `models/` e `routes/`, a skill identificou o falso senso de organização (*Fat Routes* sem `config/`, `controllers/` ou `middlewares/`), além de detectar APIs obsoletas (`datetime.utcnow()` e `Model.query.get()`) e débitos escondidos em pastas auxiliares (`services/notification_service.py` e `utils/helpers.py`). A aplicação do **Padrão 12** extraiu os controllers preservando integralmente todos os endpoints originais.
 
 ---
 
@@ -579,4 +627,3 @@ python tests/run_all_tests.py
 | **Fase 3: Remoção de Backdoors SQL** | Obrigatório | **`/admin/query` eliminado (retorna 404)** |
 | **Fase 3: Proteção de Endpoints Administrativos** | Obrigatório | **`/admin/reset-db` protegido por `@require_admin` + Ambiente** |
 | **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (16/16 testes automatizados) |
-| **Higiene de Repositório (`.gitignore` local)** | Sem `.env`/`.gitignore`/`PLANO.md` | **100% Conforme via `.git/info/exclude`** |

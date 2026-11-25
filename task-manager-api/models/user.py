@@ -4,6 +4,7 @@ Garante armazenamento seguro de senhas através de PBKDF2/scrypt e previne vazam
 """
 
 from datetime import datetime, timezone
+import hashlib
 from typing import Any, Dict
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db
@@ -65,7 +66,6 @@ class User(db.Model):
             pass
 
         # Suporte a senhas antigas em texto plano ou MD5 legado com migração transparente
-        import hashlib
         legacy_md5 = hashlib.md5(pwd.encode()).hexdigest()
         if self.password == pwd or self.password == legacy_md5:
             # Atualiza para hash seguro

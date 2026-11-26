@@ -65,7 +65,7 @@ def atualizar_status_pedido(pedido_id: int) -> Tuple[Response, int]:
     if novo_status not in STATUS_VALIDOS:
         return jsonify({"erro": "Status inválido"}), 400
 
-    PedidoModel.atualizar_status(pedido_id, novo_status)
+    PedidoService.atualizar_status(pedido_id, novo_status)
     logger.info("Status do pedido %s atualizado para %s", pedido_id, novo_status)
 
     return jsonify({"sucesso": True, "mensagem": "Status atualizado"}), 200

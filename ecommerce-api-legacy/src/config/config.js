@@ -3,6 +3,8 @@
  * Centraliza variáveis de ambiente com comportamento fail-closed e sem segredos estáticos.
  */
 
+const crypto = require('crypto');
+
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   dbPath: process.env.DB_PATH || ":memory:",
@@ -10,6 +12,7 @@ const config = {
   dbPass: process.env.DB_PASS || "",
   paymentGatewayKey: process.env.PAYMENT_GATEWAY_KEY || "",
   smtpUser: process.env.SMTP_USER || "",
+  secretKey: (process.env.SECRET_KEY || "").trim() || crypto.randomBytes(32).toString('hex'),
   nodeEnv: (process.env.NODE_ENV || "production").trim().toLowerCase()
 };
 

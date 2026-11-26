@@ -13,14 +13,14 @@ Repositório público com a entrega completa do desafio técnico de criação de
   - `ecommerce-api-legacy/.claude/skills/refactor-arch/`
   - `task-manager-api/.claude/skills/refactor-arch/`
 - **Relatórios de Auditoria da Fase 2:**
-  - `reports/audit-project-1.md` (14 achados `[F1]`–`[F14]`: 5 CRITICAL, 3 HIGH, 3 MEDIUM, 3 LOW)
-  - `reports/audit-project-2.md` (10 achados `[F1]`–`[F10]`: 3 CRITICAL, 3 HIGH, 2 MEDIUM, 2 LOW)
-  - `reports/audit-project-3.md` (11 achados `[F1]`–`[F11]`: 3 CRITICAL, 2 HIGH, 4 MEDIUM, 2 LOW)
-- **Finding Closure Gate:** Todos os 35 achados levantados na Fase 2 foram integralmente sanados na Fase 3, com blindagem adicional contra escalação de privilégio e falhas *fail-open*:
+  - `reports/audit-project-1.md` (14 achados `[F1]`–`[F14]`: 6 CRITICAL, 2 HIGH, 3 MEDIUM, 3 LOW)
+  - `reports/audit-project-2.md` (12 achados `[F1]`–`[F12]`: 5 CRITICAL, 2 HIGH, 3 MEDIUM, 2 LOW)
+  - `reports/audit-project-3.md` (12 achados `[F1]`–`[F12]`: 4 CRITICAL, 1 HIGH, 5 MEDIUM, 2 LOW)
+- **Finding Closure Gate:** Todos os 38 achados levantados na Fase 2 foram integralmente sanados na Fase 3, com blindagem adicional contra escalação de privilégio e falhas *fail-open*:
   - Endpoints vulneráveis de execução SQL arbitrária (`/admin/query`) foram **completamente removidos** da tabela de rotas (retornando HTTP 404).
-  - Endpoints administrativos destrutivos (`/admin/reset-db`) operam em modo **Fail-Closed** (`ENVIRONMENT` ausente assume `"production"` e retorna `403`), exigem token Bearer assinado com chave via `SECRET_KEY` (ou entropia CSPRNG efêmera via `secrets.token_hex(32)`), e revalidam existência e papel `admin` no banco (`@require_admin` delegando ao `AdminModel`).
-  - Endpoints públicos de cadastro (`POST /usuarios`, `POST /users`) ignoram campos privilegiados (`tipo`/`role`), atribuindo sempre o papel de menor privilégio (`cliente`/`user`).
-- **Suíte de Testes E2E 100% Reais (Zero Mocks):** `tests/run_all_tests.py` (19 cenários/suítes black-box subindo servidores reais `python app.py` e `node src/app.js` sem `test_client()` nem mocks, 100% aprovados)
+  - Endpoints administrativos sensíveis e destrutivos (`/admin/reset-db` no Projeto 1 e `GET /api/admin/financial-report` no Projeto 2) são protegidos por `@require_admin` / `requireAdmin` com Bearer token assinado (`itsdangerous` / HMAC-SHA256 com chave via `SECRET_KEY` ou CSPRNG efêmero), revalidação de papel administrativo diretamente no banco SQLite e trava **Fail-Closed** no reset de banco (`ENVIRONMENT` ausente assume `"production"` e retorna `403`).
+  - Endpoints públicos de cadastro (`POST /usuarios`, `POST /api/checkout`, `POST /users`) ignoram campos privilegiados (`tipo`/`role`), atribuindo sempre o papel de menor privilégio (`cliente`/`student`/`user`), enquanto `POST /login` em todos os projetos emite tokens assinados criptograficamente (sem tokens falsos literais).
+- **Suíte de Testes E2E 100% Reais (Zero Mocks):** `tests/run_all_tests.py` (22 cenários/suítes black-box subindo servidores reais `python app.py`, `node src/app.js` e `python seed.py` sem `test_client()` nem mocks, 100% aprovados)
 - **Documentação de Testes:** `TESTES.md`
 
 ---
@@ -76,22 +76,25 @@ skill-auditoria-refatoracao-mba/
 ├── ecommerce-api-legacy/                  # Projeto 2: Node.js/Express (LMS API com checkout)
 │   ├── .claude/skills/refactor-arch/      # Cópia idêntica da Custom Skill (SHA-256 verificado)
 │   ├── src/                               # Arquitetura MVC refatorada em Promises / async/await
-│   │   ├── config/config.js               # Variáveis de ambiente seguras via process.env
-│   │   ├── database/db.js                 # Inicialização com seed hasheada (hashPassword)
-│   │   ├── services/security.service.js   # Hashing PBKDF2 e mascaramento de cartão (PCI-DSS)
+│   │   ├── config/config.js               # Variáveis fail-closed e secretKey efêmera CSPRNG
+│   │   ├── database/db.js                 # Inicialização com papel e seed hasheada PBKDF2
+│   │   ├── services/security.service.js   # PBKDF2, HMAC-SHA256 timingSafeEqual e PCI-DSS
 │   │   ├── models/                        # Camada de persistência relacional
-│   │   │   ├── user.model.js              # Deleção em lote relacional sem N+1 deletes
+│   │   │   ├── user.model.js              # Deleção em lote e suporte a role sem escalação
 │   │   │   ├── course.model.js
 │   │   │   ├── enrollment.model.js
 │   │   │   ├── payment.model.js
 │   │   │   ├── report.model.js            # Agregação SQL isolada (sem SQL no controller)
 │   │   │   └── audit.model.js
 │   │   ├── controllers/
-│   │   │   ├── checkout.controller.js     # Variáveis semânticas, crypto fallback e async/await
+│   │   │   ├── auth.controller.js         # Login com emissão de token HMAC-SHA256
+│   │   │   ├── checkout.controller.js     # Nomes semânticos, BoundedCache, papel fixo 'student'
 │   │   │   ├── report.controller.js       # Relatório financeiro via ReportModel
-│   │   │   └── user.controller.js
-│   │   ├── routes/                        # Express Routers desacoplados
-│   │   ├── middlewares/errorHandler.js    # Respostas de erro padronizadas em JSON
+│   │   │   └── user.controller.js         # Proteção contra exclusão de contas admin
+│   │   ├── routes/                        # Express Routers (report.routes.js com requireAdmin)
+│   │   ├── middlewares/
+│   │   │   ├── authMiddleware.js          # Guard requireAdmin com revalidação no SQLite
+│   │   │   └── errorHandler.js            # Respostas de erro padronizadas em JSON
 │   │   ├── AppManager.js                  # Fachada delegadora de compatibilidade
 │   │   ├── utils.js                       # BoundedCache (max 500 itens) sem memory leak
 │   │   └── app.js                         # Composition root do Express
@@ -103,14 +106,15 @@ skill-auditoria-refatoracao-mba/
 ├── task-manager-api/                      # Projeto 3: Python/Flask + SQLAlchemy (Task Manager)
 │   ├── .claude/skills/refactor-arch/      # Cópia idêntica da Custom Skill (SHA-256 verificado)
 │   ├── config/
-│   │   └── settings.py                    # Classe Config com SMTP e DB via os.getenv
+│   │   └── settings.py                    # Classe Config fail-closed com SMTP e secretKey CSPRNG
 │   ├── controllers/                       # Camada Controller desacoplada das rotas
 │   │   ├── task_controller.py             # Validação de query params e reuso de helpers
-│   │   ├── user_controller.py             # Login com contrato original e to_dict() seguro
+│   │   ├── user_controller.py             # Login com token assinado e anti-Mass Assignment
 │   │   └── report_controller.py           # Agregações SQL, cor hexadecimal e zero N+1
 │   ├── middlewares/
+│   │   ├── auth_middleware.py             # Emissão/verificação de token via itsdangerous
 │   │   └── error_handler.py               # Manipulador centralizado sem vazamento de exceção
-│   ├── models/                            # Hashing PBKDF2, SQLAlchemy 2.0 e sem senhas expostas
+│   ├── models/                            # Hashing PBKDF2/scrypt (zero MD5), SQLAlchemy 2.0
 │   ├── routes/                            # Blueprints limpos delegando aos Controllers
 │   ├── services/
 │   │   └── notification_service.py        # SMTP desacoplado e sem senha hardcoded
@@ -124,14 +128,14 @@ skill-auditoria-refatoracao-mba/
 │
 ├── reports/                               # Relatórios oficiais de auditoria (Fase 2)
 │   ├── audit-project-1.md                 # 14 achados em code-smells-project (soma exata 14)
-│   ├── audit-project-2.md                 # 10 achados em ecommerce-api-legacy (soma exata 10)
-│   └── audit-project-3.md                 # 11 achados em task-manager-api (soma exata 11)
+│   ├── audit-project-2.md                 # 12 achados em ecommerce-api-legacy (soma exata 12)
+│   └── audit-project-3.md                 # 12 achados em task-manager-api (soma exata 12)
 │
 └── tests/                                 # Suíte unificada de testes E2E reais (Zero Mocks)
     ├── run_all_tests.py                   # Orquestrador unificado dos 3 projetos
     ├── test_code_smells_project.py        # 5 suítes (2 processos reais + Red-Team /admin e Mass Assignment)
-    ├── test_ecommerce_api.js              # 9 cenários E2E reais (node src/app.js + auditoria PCI-DSS e SQLite)
-    └── test_task_manager_api.py           # 5 suítes (seed.py + app.py reais + anti-Mass Assignment)
+    ├── test_ecommerce_api.js              # 12 cenários E2E reais (RBAC /admin, HMAC, PCI-DSS e SQLite)
+    └── test_task_manager_api.py           # 5 suítes (seed.py + app.py reais + tokens assinados + DB audit)
 ```
 
 ---
@@ -151,7 +155,7 @@ Antes da construção e execução da skill, foi conduzida uma análise manual a
 | **CRITICAL** | Endpoint Destrutivo de Reset de Banco Sem Autenticação | `app.py:47-58` | Rota `/admin/reset-db` apaga todas as tabelas do sistema sem checagem de permissão ou token. |
 | **CRITICAL** | Credenciais Hardcoded e Vazamento de Dados Sensíveis | `app.py:7`, `controllers.py:287-290` | `SECRET_KEY = "minha-chave-super-secreta-123"` gravada em código; rota `/health` vaza `secret_key` e caminhos internos no JSON. |
 | **CRITICAL** | Senhas Armazenadas e Retornadas em Texto Claro | `models.py:83, 99, 110, 128` | Senhas salvas sem hashing e expostas no payload de retorno da API. |
-| **HIGH** | God Module / Violação Total de SRP | `models.py:1-314` | Módulo acumula persistência, conexões, regras de estoque, processamento de pedidos e relatórios de 4 domínios diferentes. |
+| **CRITICAL** | God Module / Violação Total de SRP | `models.py:1-314` | Módulo acumula persistência, conexões, regras de estoque, processamento de pedidos e relatórios de 4 domínios diferentes. |
 | **HIGH** | Lógica de Negócio e Notificações em Controllers | `controllers.py:208-210, 247-251` | Handlers HTTP concentram prints de SMS/email e manipulação de estoque misturados ao transporte. |
 | **HIGH** | Estado Global Mutável e Conexão Compartilhada | `database.py:7-14` | Variável global `db` reutilizada sem pool ou context manager, vulnerável a race conditions. |
 | **MEDIUM** | N+1 Query Problem em Pedidos e Itens | `models.py:177-200, 219-232` | Ao listar pedidos, dispara uma query adicional por item e por produto ($1 + P \times (1 + I)$ queries). |
@@ -168,33 +172,36 @@ Antes da construção e execução da skill, foi conduzida uma análise manual a
 | Severidade | Anti-Pattern / Problema | Localização | Justificativa e Impacto |
 | :--- | :--- | :--- | :--- |
 | **CRITICAL** | Hardcoded Production Credentials e Gateway Keys | `src/utils.js:1-7` | Chaves de gateway `paymentGatewayKey: "pk_live_1234567890abcdef"` e senhas de banco expostas em código. |
-| **CRITICAL** | Criptografia Quebrada / Pseudo-Hash Inseguro | `src/utils.js:17-23`, `src/AppManager.js:68` | Função `badCrypto` gera saída previsível truncada em 10 caracteres sem salt, vulnerável a ataques de colisão. |
-| **CRITICAL** | Vazamento de Dados de Cartão nos Logs (PCI-DSS) | `src/AppManager.js:45` | Impressão no console do número completo do cartão de crédito (`console.log`), violando PCI-DSS e LGPD. |
-| **HIGH** | God Class / Violação de Responsabilidade Única | `src/AppManager.js:1-139` | Centraliza conexão SQLite, DDL de tabelas, seeds, roteamento Express, checkout e relatórios. |
-| **HIGH** | Callback Hell / Spaghetti Assíncrono | `src/AppManager.js:37-77` | 5 níveis de callbacks aninhados no endpoint de checkout com manipulação manual de concorrência. |
-| **HIGH** | N+1 Query Problem no Relatório Financeiro | `src/AppManager.js:89-125` | Para cada curso busca matrículas, e para cada matrícula busca aluno e pagamento individualmente. |
+| **CRITICAL** | Criptografia Quebrada / Pseudo-Hash e Seed em Texto Claro | `src/utils.js:17-23`, `src/AppManager.js:18, 68` | Função `badCrypto` trunca saída Base64 em 10 caracteres sem salt, e seed inicial grava senha `'123'` em texto puro. |
+| **CRITICAL** | Vazamento de Dados de Cartão e Chave nos Logs (PCI-DSS) | `src/AppManager.js:45` | Impressão no console do número completo do cartão de crédito e chave do gateway (`console.log`), violando PCI-DSS e LGPD. |
+| **CRITICAL** | Endpoint Administrativo de Relatório Financeiro Sem Autenticação | `src/AppManager.js:80-129` | Rota `/api/admin/financial-report` expõe publicamente faturamento por curso, nomes de alunos e pagamentos sem nenhum token ou RBAC. |
+| **CRITICAL** | God Class / Violação Total de Responsabilidade Única | `src/AppManager.js:1-141` | Centraliza conexão SQLite, DDL de tabelas, seeds, roteamento Express, checkout e relatórios. |
+| **HIGH** | Callback Hell / Spaghetti Assíncrono | `src/AppManager.js:37-77, 89-128` | 5 níveis de callbacks aninhados no endpoint de checkout com manipulação manual de concorrência em relatórios. |
+| **HIGH** | Estado Global Mutável em Memória | `src/utils.js:9-15`, `src/AppManager.js:59` | Variáveis globais `globalCache` e `totalRevenue` manipuladas sem sincronização ou limite de tamanho (memory leak). |
+| **MEDIUM** | N+1 Query Problem no Relatório Financeiro | `src/AppManager.js:89-125` | Para cada curso busca matrículas, e para cada matrícula busca aluno e pagamento individualmente ($1 + C + 2CE$). |
 | **MEDIUM** | Exclusão Inconsistente de Usuário com Registros Órfãos | `src/AppManager.js:131-136` | Exclui usuário na tabela `users` sem cascade, deixando registros pendentes em `enrollments` e `payments`. |
-| **MEDIUM** | Estado Global Mutável em Memória | `src/utils.js:9-15` | Variáveis globais `globalCache` e `totalRevenue` manipuladas sem sincronização ou limite de tamanho. |
-| **LOW** | Parâmetros de Requisição Crípticos | `src/AppManager.js:29-35` | Parâmetros `usr`, `eml`, `pwd`, `c_id`, `card` sem validação tipada de entrada ou nomes semânticos. |
-| **LOW** | Tratamento de Erros Inconsistente | `src/AppManager.js:41, 51, 55` | Retorno de strings cruas (`"Erro DB"`) sem padronização JSON ou códigos HTTP semânticos. |
+| **MEDIUM** | Tratamento de Erros Descentralizado em Texto Cru | `src/AppManager.js:41, 51, 55, 70, 84` | Retorno de strings cruas (`"Erro DB"`) sem middleware centralizado nem padronização JSON. |
+| **LOW** | Parâmetros de Requisição e Identificadores Crípticos | `src/AppManager.js:29-35` | Variáveis de uma letra (`u`, `e`, `p`, `cid`, `cc`) prejudicando legibilidade e manutenção. |
+| **LOW** | Magic Numbers e Literais Soltos | `src/AppManager.js:19, 46, 68`, `src/utils.js:19-22` | Prefixos e constantes numéricas (`"4"`, `10000`, truncamento `10`) espalhados sem constantes nomeadas. |
 
 ### 3. Projeto 3: `task-manager-api` (Python/Flask + SQLAlchemy)
 - **Domínio:** API de gerenciamento de tarefas, categorias, atribuição de usuários e relatórios estatísticos.
-- **Estrutura Original:** Projeto parcialmente organizado em diretórios (`models/`, `routes/`, `services/`, `utils/`), porém com graves débitos de segurança, ausência de camada Controller real e problemas de robustez.
+- **Estrutura Original:** Projeto parcialmente organizado em diretórios (`models/`, `routes/`, `services/`, `utils/` — 11 módulos Python analisados), porém com graves débitos de segurança, ausência de camadas `config/`, `controllers/` e `middlewares/` e problemas de robustez.
 
 | Severidade | Anti-Pattern / Problema | Localização | Justificativa e Impacto |
 | :--- | :--- | :--- | :--- |
 | **CRITICAL** | Criptografia de Senhas Insegura com MD5 | `models/user.py:27-32` | Armazenamento de senhas via MD5 puro sem salt (`hashlib.md5(pwd.encode()).hexdigest()`), quebrado por rainbow tables. |
 | **CRITICAL** | Exposição de Senhas nas Respostas da API | `models/user.py:16-25`, `routes/user_routes.py:33` | O método `to_dict()` inclui explicitamente `'password': self.password`, retornando o hash nas respostas JSON. |
-| **CRITICAL** | Hardcoded Secret Key no Código | `app.py:13` | Configuração `app.config['SECRET_KEY'] = 'super-secret-key-123'` permitindo falsificação de sessões e tokens. |
-| **HIGH** | N+1 Query Problem em Listagens e Relatórios | `routes/task_routes.py:41-58`, `routes/report_routes.py:53-68` | Em `GET /tasks`, executa queries separadas por tarefa para usuário e categoria. Em `/reports/summary`, faz queries por usuário. |
-| **HIGH** | Fat Routes e Violação de Separação de Responsabilidades | `routes/task_routes.py:86-154`, `routes/report_routes.py:13-101` | Rotas acopladas a transações do ORM (`db.session`), validações manuais e cálculos complexos sem Controllers. |
-| **MEDIUM** | Captura Genérica e Mascaramento de Exceções (Bare Except) | `routes/task_routes.py:62, 137, 236`, `utils/helpers.py:46, 49, 88` | Uso de blocos `except:` nus engolindo erros de sistema e mascarando diagnósticos sem logging de stack trace. |
-| **MEDIUM** | Credenciais SMTP Hardcoded no Serviço de Notificações | `services/notification_service.py:7-10` | Senha em texto puro (`self.email_password = 'senha123'`) e usuário SMTP fixados diretamente no construtor da classe. |
-| **MEDIUM** | Ausência de Validação de Tipos em Filtros de Busca | `routes/task_routes.py:224-259` | Rota `/tasks/search` realiza casts manuais de query parameters sem validação, provocando falhas e inconsistências HTTP. |
-| **MEDIUM** | Código Morto, Imports Não Utilizados e Acoplamento em Helpers | `utils/helpers.py:1-8, 31-34` | 5 imports mortos (`sys`, `math`, `hashlib`, `os`, `json`), import de `uuid` dentro de função e duplicação DRY entre rotas e helpers. |
-| **LOW** | Métodos e APIs Obsoletas / Depreciadas | `models/user.py:14`, `routes/task_routes.py:42, 67`, `notification_service.py:35` | Uso de `datetime.utcnow()` (depreciada no Python 3.12+) e `Model.query.get(id)` (depreciada no SQLAlchemy 2.0). |
-| **LOW** | Lógica Booleana Redundante e Código Prolixo | `models/user.py:34-38`, `models/task.py:38-60`, `helpers.py:19-23, 52-55` | Condicionais `if ... return True else return False` em cascata em vez de retornar a expressão booleana direta. |
+| **CRITICAL** | Hardcoded Secret Key, SMTP em Texto Puro e Token Sem Assinatura | `app.py:13`, `services/notification_service.py:7-10`, `routes/user_routes.py:210` | `SECRET_KEY = 'super-secret-key-123'`, senha SMTP `'senha123'` em texto puro e emissão de token fake previsível (`fake-jwt-token-<id>`). |
+| **CRITICAL** | Mass Assignment e Escalação de Privilégio em Rotas de Usuário | `routes/user_routes.py:52, 71-78, 119-123` | `POST /users` e `PUT /users/:id` aceitam `role: "admin"` do payload público sem autenticação. |
+| **HIGH** | Fat Routes e Violação de Separação de Responsabilidades | `routes/task_routes.py:86-223`, `routes/report_routes.py:13-155` | Rotas acopladas a transações do ORM (`db.session`), validações manuais e cálculos complexos sem Controllers. |
+| **MEDIUM** | N+1 Query Problem em Listagens e Relatórios | `routes/task_routes.py:41-58`, `routes/report_routes.py:53-68, 159-163` | Em `GET /tasks`, executa queries separadas por tarefa para usuário e categoria. Em `/reports/summary` e `/categories`, faz queries por usuário e categoria. |
+| **MEDIUM** | Uso de APIs Obsoletas / Depreciadas | `models/user.py:14`, `routes/task_routes.py:42, 67`, `notification_service.py:35` | Uso de `datetime.utcnow()` (depreciada no Python 3.12+) e `Model.query.get(id)` (depreciada no SQLAlchemy 2.0). |
+| **MEDIUM** | Captura Genérica e Mascaramento de Exceções (Bare Except) | `routes/task_routes.py:62, 134, 236`, `utils/helpers.py:46, 49, 88` | Blocos `except:` nus engolindo erros de sistema e mascarando diagnósticos sem middleware centralizado de erro. |
+| **MEDIUM** | Ausência de Validação de Tipos em Filtros de Busca | `routes/task_routes.py:241-271` | Rota `/tasks/search` realiza `int()` direto em query parameters, causando erro 500 em inputs inválidos. |
+| **MEDIUM** | Duplicação de Validações (Violação DRY) e Helpers Subutilizados | `utils/helpers.py:58-107`, `routes/task_routes.py:86-154` | Rotas duplicam regex e validações já existentes em `helpers.py`; `is_valid_color` aceita hexadecimais inválidos (`#zzzzzz`). |
+| **LOW** | Lógica Booleana Redundante e Verificações Não-Idiomáticas | `models/user.py:34-38`, `models/task.py:38-60`, `helpers.py:19-23, 52-55, 103` | Condicionais `if ... return True else return False` e checagem com `type(tags) == list` em vez de `isinstance`. |
+| **LOW** | Imports Mortos/Fora de Escopo, Magic Numbers e Prints de Debug | `utils/helpers.py:1-7, 31-34`, `app.py:7` | 5 imports mortos (`sys`, `math`, `hashlib`, `os`, `json`), import de `uuid` dentro de função e literais sem constantes. |
 
 ---
 
@@ -239,16 +246,16 @@ O catálogo (`references/anti-patterns-catalog.md`) reúne **12 anti-patterns** 
 | :---: | :--- | :---: | :--- |
 | **1** | **SQL Injection** | `CRITICAL` | Previne interpolação de strings em queries SQL detectada massivamente no `code-smells-project`. |
 | **2** | **God Class / God Module** | `CRITICAL` | Ataca arquivos monolíticos (`models.py` e `AppManager.js`) que violam o Princípio da Responsabilidade Única (SRP). |
-| **3** | **Hardcoded Secrets and Credentials** | `CRITICAL` | Captura chaves, senhas de banco e credenciais SMTP em código (`app.py`, `utils.js`, `notification_service.py`). |
-| **4** | **Weak Cryptography and Password Exposure** | `CRITICAL` | Identifica texto plano, MD5 sem salt, `badCrypto` em Base64, vazamento de senhas em `to_dict()` e cartões em logs (PCI-DSS). |
-| **5** | **Arbitrary SQL Execution Endpoints** | `CRITICAL` | Garante a detecção e eliminação de backdoors administrativos (`/admin/query`) e endpoints destrutivos abertos (`/admin/reset-db`). |
+| **3** | **Hardcoded Secrets, Credentials & Fake Tokens** | `CRITICAL` | Captura chaves, senhas de banco, credenciais SMTP, fallbacks estáticos e tokens literais não assinados (`fake-jwt-token`). |
+| **4** | **Weak Cryptography & Sensitive Data Exposure** | `CRITICAL` | Identifica texto plano, MD5 sem salt, `badCrypto` em Base64, vazamento de senhas em `to_dict()` e cartões em logs (PCI-DSS). |
+| **5** | **Unprotected `/admin*`, SQL Backdoors, Mass Assignment & Fail-Open** | `CRITICAL` | Heurística universal sinalizando toda rota `/admin*` sem auth/admin (`/admin/query`, `/admin/reset-db`, `/api/admin/financial-report`), `tipo`/`role` em cadastros públicos e defaults `development`. |
 | **6** | **Business Logic in Controllers / Fat Routes** | `HIGH` | Separa regras de domínio, cálculos e ORM acoplados em rotas (`controllers.py`, `routes/task_routes.py`). |
-| **7** | **Tight Coupling & Callback Hell / Spaghetti Async** | `HIGH` | Detecta pirâmides de callbacks no Node.js (`AppManager.js`) e acoplamento rígido a estado global mutável. |
+| **7** | **Tight Coupling, Callback Hell & Global Mutable State** | `HIGH` | Detecta pirâmides de callbacks no Node.js (`AppManager.js`) e estado global mutável compartilhado (`globalCache`, `totalRevenue`). |
 | **8** | **N+1 Query Problem** | `MEDIUM` | Corrige loops disparando queries por item em listagens e relatórios nos 3 projetos. |
 | **9** | **Deprecated APIs and Outdated Patterns** | `MEDIUM` | Detecta `datetime.utcnow()` (Python 3.12+) e `Model.query.get(id)` (SQLAlchemy 2.0) sugerindo substitutos canônicos. |
 | **10** | **Missing Centralized Error Handling & Bare Excepts** | `MEDIUM` | Elimina blocos `except:` nus e padroniza handlers globais de erro sem expor detalhes internos. |
-| **11** | **Magic Numbers and Poor Naming** | `LOW` | Combate identificadores crípticos (`u`, `e`, `cid`, `cc`) e literais soltos (`10000`, `5000`, `4`). |
-| **12** | **Missing Route Parameter Validation & Info Disclosure** | `MEDIUM` | Impede crashes 500 por query strings inválidas (`preco_min=abc`, `priority=abc`) e vazamento de stack traces. |
+| **11** | **Magic Numbers, Poor Naming, Dead Imports & Redundant Booleans** | `LOW` | Combate identificadores crípticos (`u`, `e`, `cid`, `cc`), literais soltos (`10000`, `5000`, `4`) e código morto. |
+| **12** | **Missing Route Validation, Orphan Records & DRY Violations** | `MEDIUM` | Impede crashes 500 (`preco_min=abc`, `priority=abc`), registros órfãos sem cascata e validações duplicadas fora de helpers. |
 
 ### 3. Como Garantimos que a Skill é Agnóstica de Tecnologia
 
@@ -276,9 +283,9 @@ O catálogo (`references/anti-patterns-catalog.md`) reúne **12 anti-patterns** 
 
 | Projeto | Stack Tecnológica | Total de Achados | CRITICAL | HIGH | MEDIUM | LOW | Critério Mínimo Atendido |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`code-smells-project`** | Python + Flask | **14** | 5 | 3 | 3 | 3 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
-| **`ecommerce-api-legacy`** | Node.js + Express | **10** | 3 | 3 | 2 | 2 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
-| **`task-manager-api`** | Python + Flask + SQLAlchemy | **11** | 3 | 2 | 4 | 2 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
+| **`code-smells-project`** | Python + Flask | **14** | 6 | 2 | 3 | 3 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
+| **`ecommerce-api-legacy`** | Node.js + Express | **12** | 5 | 2 | 3 | 2 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
+| **`task-manager-api`** | Python + Flask + SQLAlchemy | **12** | 4 | 1 | 5 | 2 | ✅ ($\ge 5$ findings, $\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW) |
 
 ### 2. Comparativo Antes e Depois da Estrutura de Diretórios
 
@@ -336,7 +343,7 @@ ANTES:
 ecommerce-api-legacy/
 ├── src/
 │   ├── app.js               # Entrypoint Express simples
-│   ├── AppManager.js        # God Class (139 linhas com DDL, routes, checkout, relatórios com N+1)
+│   ├── AppManager.js        # God Class (141 linhas: DDL, routes, checkout, /api/admin/financial-report aberto e N+1)
 │   └── utils.js             # Credenciais de produção hardcoded, badCrypto e cache global mutável
 ├── api.http
 └── package.json
@@ -347,22 +354,25 @@ ecommerce-api-legacy/
 │   ├── app.js                       # Composition root configurado com middlewares
 │   ├── AppManager.js                # Fachada delegadora para testes legados
 │   ├── utils.js                     # BoundedCache (máximo 500 itens) prevenindo memory leaks
-│   ├── config/config.js             # Variáveis de ambiente seguras via process.env
-│   ├── database/db.js               # SQLite serializado com senha de seed hasheada via PBKDF2
-│   ├── services/security.service.js # Hashing com salt e mascaramento de cartão em log (PCI-DSS)
+│   ├── config/config.js             # Variáveis fail-closed e secretKey efêmera CSPRNG
+│   ├── database/db.js               # SQLite serializado com papel e seeds PBKDF2
+│   ├── services/security.service.js # PBKDF2, HMAC-SHA256 timingSafeEqual e PCI-DSS
 │   ├── models/                      # Camada Model
-│   │   ├── user.model.js            # Deleção em lote relacional sem N+1 deletes
+│   │   ├── user.model.js            # Deleção em lote relacional e papel seguro sem escalação
 │   │   ├── course.model.js
 │   │   ├── enrollment.model.js
 │   │   ├── payment.model.js
 │   │   ├── report.model.js          # Agregação SQL sem loop N+1 (Zero SQL nos controllers)
 │   │   └── audit.model.js
 │   ├── controllers/                 # Camada Controller
-│   │   ├── checkout.controller.js   # Nomes semânticos, crypto fallback e async/await
+│   │   ├── auth.controller.js       # Login HMAC-SHA256
+│   │   ├── checkout.controller.js   # Nomes semânticos, BoundedCache e async/await
 │   │   ├── report.controller.js     # Formatação de relatório financeiro via ReportModel
-│   │   └── user.controller.js
-│   ├── routes/                      # Roteamento modular Express
-│   └── middlewares/errorHandler.js  # Respostas de erro padronizadas em JSON sem vazamento interno
+│   │   └── user.controller.js       # Proteção contra exclusão de contas admin
+│   ├── routes/                      # Roteamento modular Express (report.routes.js com requireAdmin)
+│   └── middlewares/
+│       ├── authMiddleware.js        # Proteção requireAdmin com revalidação de role no SQLite
+│       └── errorHandler.js          # Respostas de erro padronizadas em JSON sem vazamento interno
 ├── api.http
 └── package.json
 ```
@@ -378,7 +388,7 @@ task-manager-api/
 │   ├── user.py              # MD5 inseguro, import hashlib interno e senha exposta em to_dict()
 │   ├── task.py              # datetime.utcnow() e condicionais redundantes
 │   └── category.py
-├── routes/                  # Fat Routes (rotas acumulando regras de negócio e ORM)
+├── routes/                  # Fat Routes (rotas acumulando regras de negócio, fake-jwt-token e ORM)
 ├── services/
 │   └── notification_service.py # Credenciais SMTP hardcoded (self.email_password = 'senha123')
 └── utils/
@@ -391,15 +401,16 @@ task-manager-api/
 ├── seed.py                  # Atualizado com datetime.now(timezone.utc)
 ├── requirements.txt
 ├── config/
-│   └── settings.py          # Classe Config centralizada com leitura de env vars e SMTP
+│   └── settings.py          # Classe Config fail-closed com env vars, SMTP e secretKey CSPRNG
 ├── controllers/             # Camada Controller desacoplada
 │   ├── task_controller.py   # Validação de queries de busca e reuso de helpers
-│   ├── user_controller.py   # Login com token compatível, gestão de contas e to_dict() sem senha
+│   ├── user_controller.py   # Login com token assinado, anti-Mass Assignment e to_dict() sem senha
 │   └── report_controller.py # Agregações SQL, validação de cor e contagens eager sem N+1
 ├── middlewares/
+│   ├── auth_middleware.py   # Geração/validação criptográfica de tokens (itsdangerous)
 │   └── error_handler.py     # Middleware centralizado para HTTPException e exceções inesperadas
 ├── models/
-│   ├── user.py              # PBKDF2/scrypt, remoção de senha em to_dict() e PEP 8
+│   ├── user.py              # PBKDF2/scrypt (zero MD5), remoção de senha em to_dict() e PEP 8
 │   ├── task.py              # Timestamps timezone-aware e simplificação de validações
 │   └── category.py
 ├── routes/                  # Blueprints enxutos delegando exclusivamente aos Controllers
@@ -441,42 +452,42 @@ task-manager-api/
 - [x] Framework detectado corretamente (Express 4.18)
 - [x] Domínio da aplicação descrito corretamente (LMS E-commerce API com checkout)
 - [x] Número de arquivos analisados condiz com a realidade (3 arquivos originais)
-- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F10]`)
+- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F12]`)
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
-- [x] Mínimo de 5 findings identificados (10 encontrados)
+- [x] Mínimo de 5 findings identificados (12 encontrados)
 - [x] Detecção de APIs deprecated incluída (se aplicável — verificada migração para Promises/`async/await`)
 - [x] Skill pausa e pede confirmação antes da Fase 3
 - [x] Estrutura de diretórios segue padrão MVC
-- [x] Configuração extraída para módulo de config (sem hardcoded)
+- [x] Configuração extraída para módulo de config (fail-closed + CSPRNG, sem hardcoded)
 - [x] Models criados para abstrair dados (incluindo `ReportModel`)
-- [x] Views/Routes separadas para roteamento
-- [x] Controllers concentram o fluxo da aplicação
+- [x] Views/Routes separadas para roteamento (`report.routes.js` protegido com `requireAdmin` HMAC-SHA256)
+- [x] Controllers concentram o fluxo da aplicação (anti-Mass Assignment + proteção contra remoção de admin)
 - [x] Callback Hell eliminado com Promises e `async/await`
 - [x] Senhas de seed hasheadas com salt PBKDF2 e deleção em lote sem N+1
-- [x] Cache global mutável substituído por `BoundedCache`
+- [x] Cache global mutável substituído por `BoundedCache` integrado ao checkout
 - [x] Error handling centralizado
 - [x] Entry point claro
 - [x] Aplicação inicia sem erros
-- [x] Endpoints originais respondem corretamente
+- [x] Endpoints respondem corretamente (incluindo fluxo autenticado em `/api/login` + `/api/admin/financial-report`)
 
 #### Checklist de Validação — `task-manager-api`
 - [x] Linguagem detectada corretamente (Python 3)
 - [x] Framework detectado corretamente (Flask + SQLAlchemy)
 - [x] Domínio da aplicação descrito corretamente (Task Manager API)
-- [x] Número de arquivos analisados condiz com a realidade (8 arquivos originais)
-- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F11]`)
+- [x] Número de arquivos analisados condiz com a realidade (11 arquivos Python originais)
+- [x] Relatório segue o template definido nos arquivos de referência (`[F1]`–`[F12]`)
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
-- [x] Mínimo de 5 findings identificados (11 encontrados, cumprindo $\ge 2$ MEDIUM)
+- [x] Mínimo de 5 findings identificados (12 encontrados, cumprindo $\ge 1$ CRIT/HIGH, $\ge 2$ MEDIUM, $\ge 2$ LOW)
 - [x] Detecção de APIs deprecated incluída (`datetime.utcnow()` e `Model.query.get()`)
 - [x] Skill pausa e pede confirmação antes da Fase 3
 - [x] Estrutura de diretórios segue padrão MVC completo (Camadas `config/`, `controllers/`, `middlewares/`)
-- [x] Configuração extraída para módulo de config (sem hardcoded)
-- [x] Models criados para abstrair dados
+- [x] Configuração extraída para módulo de config (`fail-closed`, SMTP e `SECRET_KEY` via CSPRNG)
+- [x] Models criados para abstrair dados (remoção integral de `hashlib.md5`)
 - [x] Views/Routes separadas delegando exclusivamente para Controllers
+- [x] Tokens de login assinados criptograficamente via `middlewares/auth_middleware.py` e bloqueio de Mass Assignment em `POST`/`PUT /users`
 - [x] Limpeza completa de `helpers.py` (remoção de 5 imports mortos e bare excepts) e reuso nos Controllers
-- [x] Proteção e desacoplamento de credenciais SMTP no `NotificationService`
 - [x] Error handling centralizado
 - [x] Entry point claro
 - [x] Aplicação inicia sem erros
@@ -491,7 +502,7 @@ DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
 .....
 ----------------------------------------------------------------------
-Ran 5 tests in 6.268s
+Ran 5 tests in 5.429s
 
 OK
 
@@ -502,25 +513,31 @@ EXECUTANDO: node tests/test_ecommerce_api.js
 DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
 --- Iniciando Testes E2E Reais (Zero Mocks) de ecommerce-api-legacy ---
-[TEST 1] Config fail-closed sem variaveis de ambiente
-  -> OK: config.js fail-closed confirmado.
-[TEST 2] POST /api/checkout (Cartao VISA 4xxx - Sucesso)
+[TEST 1] Config fail-closed e secretKey efemera sem variaveis de ambiente
+  -> OK: config.js fail-closed + CSPRNG confirmado.
+[TEST 2] Red-Team GET /api/admin/financial-report sem token -> 401
+  -> OK: Acesso anonimo ao relatorio financeiro bloqueado com 401.
+[TEST 3] Red-Team GET /api/admin/financial-report com token forjado -> 401
+  -> OK: Token forjado rejeitado com 401.
+[TEST 4] POST /api/checkout (VISA 4xxx + tentativa role=admin no body)
   -> OK: Checkout processado sobre HTTP real.
-[TEST 3] POST /api/checkout (Cartao 5xxx - Recusado)
+[TEST 5] Red-Team Anti-Mass Assignment + RBAC (aluno tentando /api/admin/financial-report -> 403)
+  -> OK: Auto-elevacao bloqueada e aluno barrado com 403 no /api/admin/financial-report.
+[TEST 6] POST /api/checkout (Cartao 5xxx - Recusado)
   -> OK: Pagamento recusado conforme regra.
-[TEST 4] POST /api/checkout (Bad Request)
+[TEST 7] POST /api/checkout (Bad Request)
   -> OK: Rejeicao de payload incompleto.
-[TEST 5] POST /api/checkout (Cartao enviado como inteiro JSON)
+[TEST 8] POST /api/checkout (Cartao enviado como inteiro JSON)
   -> OK: Cartao numerico tratado sem erro 500.
-[TEST 6] POST /api/checkout (Curso Nao Encontrado)
+[TEST 9] POST /api/checkout (Curso Nao Encontrado)
   -> OK: 404 retornado para curso invalido.
-[TEST 7] GET /api/admin/financial-report
-  -> OK: Relatorio agregado gerado sem N+1.
-[TEST 8] DELETE /api/users/1 e verificacao de zero orfaos
-  -> OK: Exclusao em cascata comprovada no relatorio real.
-[TEST 9] Auditoria PCI-DSS no stdout real e PBKDF2 no SQLite em disco
-  -> OK: Logs PCI-DSS limpos e 100% PBKDF2 no arquivo SQLite real.
---- Todos os 9 testes E2E reais de ecommerce-api-legacy foram aprovados! ---
+[TEST 10] POST /api/login admin + GET /api/admin/financial-report -> 200
+  -> OK: Relatorio financeiro protegido respondendo 200 para admin autenticado.
+[TEST 11] Protecao contra DELETE /api/users/2 (admin) + DELETE /api/users/1 sem orfaos
+  -> OK: Exclusao em cascata comprovada e conta admin preservada.
+[TEST 12] Auditoria PCI-DSS no stdout real e PBKDF2/roles no SQLite em disco
+  -> OK: Logs PCI-DSS limpos, 100% PBKDF2 e menor privilegio no SQLite real.
+--- Todos os 12 testes E2E reais de ecommerce-api-legacy foram aprovados! ---
 
 ✅ Sucesso em ecommerce-api-legacy
 
@@ -530,7 +547,7 @@ DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
 .....
 ----------------------------------------------------------------------
-Ran 5 tests in 6.437s
+Ran 5 tests in 5.123s
 
 OK
 
@@ -626,10 +643,10 @@ python tests/run_all_tests.py
 | Critério Estabelecido | Meta | Resultado Obtido |
 | :--- | :---: | :---: |
 | **Fase 1: Detecção de Stack** | 3 / 3 Projetos | **3 / 3 Aprovados** |
-| **Fase 2: Relatórios com $\ge 5$ achados** | 3 / 3 Projetos | **3 / 3 Aprovados** (14, 10 e 11 achados) |
+| **Fase 2: Relatórios com $\ge 5$ achados** | 3 / 3 Projetos | **3 / 3 Aprovados** (14, 12 e 12 achados = 38 totais) |
 | **Fase 2: Cotas Mínimas ($\ge 1$ CRIT/HIGH, $\ge 2$ MED, $\ge 2$ LOW)** | 3 / 3 Projetos | **3 / 3 Aprovados em todos os projetos** |
 | **Fase 2: Pausa explícita `[y/n]` antes de refatorar** | Obrigatório | **Implementado no template e SKILL.md** |
-| **Fase 3: Finding Closure Gate (Resolução 1:1)** | Obrigatório | **100% dos 35 achados corrigidos na Fase 3** |
+| **Fase 3: Finding Closure Gate (Resolução 1:1)** | Obrigatório | **100% dos 38 achados corrigidos na Fase 3** |
 | **Fase 3: Remoção de Backdoors SQL** | Obrigatório | **`/admin/query` eliminado (retorna 404)** |
-| **Fase 3: Proteção de Endpoints Administrativos** | Obrigatório | **`/admin/reset-db` protegido por `@require_admin` + Fail-Closed + Anti-Mass Assignment** |
-| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (19 suítes/cenários E2E reais sem mocks) |
+| **Fase 3: Proteção de Endpoints Administrativos (`/admin*`)** | Obrigatório | **`/admin/reset-db` (`@require_admin` + Fail-Closed) e `/api/admin/financial-report` (`requireAdmin` HMAC-SHA256 + revalidação DB)** |
+| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (22 suítes/cenários E2E reais sem mocks) |

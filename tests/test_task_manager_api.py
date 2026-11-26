@@ -243,7 +243,7 @@ class TestTaskManagerAPIRealE2E(unittest.TestCase):
         st_utasks, _ = _http_json(self.base_url, "GET", "/users/1/tasks")
         self.assertEqual(st_utasks, 200)
 
-        # Login com usuário real populado pelo seed.py
+        # Login com usuário real populado pelo seed.py (deve emitir token assinado, nunca fake)
         st_seed_log, d_seed_log = _http_json(
             self.base_url,
             "POST",
@@ -251,7 +251,10 @@ class TestTaskManagerAPIRealE2E(unittest.TestCase):
             {"email": "joao@email.com", "password": "1234"},
         )
         self.assertEqual(st_seed_log, 200)
-        self.assertTrue(d_seed_log["token"].startswith("fake-jwt-token-"))
+        seed_token = d_seed_log["token"]
+        self.assertFalse(seed_token.startswith("fake-jwt-token-"))
+        self.assertIn(".", seed_token)
+        self.assertGreater(len(seed_token), 40)
 
         # Tentativa de Mass Assignment no cadastro público
         st_create, created_u = _http_json(
@@ -288,6 +291,8 @@ class TestTaskManagerAPIRealE2E(unittest.TestCase):
         )
         self.assertEqual(st_log, 200)
         self.assertIn("token", d_log)
+        self.assertFalse(d_log["token"].startswith("fake-jwt-token-"))
+        self.assertIn(".", d_log["token"])
 
         st_bad_log, _ = _http_json(
             self.base_url,

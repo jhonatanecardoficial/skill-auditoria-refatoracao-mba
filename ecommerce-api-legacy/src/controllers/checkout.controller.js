@@ -10,6 +10,7 @@ const EnrollmentModel = require('../models/enrollment.model');
 const PaymentModel = require('../models/payment.model');
 const AuditModel = require('../models/audit.model');
 const { hashPassword, maskCard } = require('../services/security.service');
+const { logAndCache } = require('../utils');
 
 const VISA_CARD_PREFIX = '4';
 
@@ -38,7 +39,8 @@ async function processCheckout(req, res, next) {
     if (!user) {
       const passwordToHash = rawPassword || crypto.randomBytes(16).toString('hex');
       const secureHash = hashPassword(passwordToHash);
-      userId = await UserModel.createUser(userName, email, secureHash);
+      // Regra Anti-Mass Assignment: cadastro via checkout público força papel 'student'
+      userId = await UserModel.createUser(userName, email, secureHash, 'student');
     } else {
       userId = user.id;
     }
@@ -55,6 +57,7 @@ async function processCheckout(req, res, next) {
     const enrollmentId = await EnrollmentModel.create(userId, courseId);
     await PaymentModel.create(enrollmentId, course.price, status);
     await AuditModel.log(`Checkout curso ${courseId} por ${userId}`);
+    logAndCache(`last_checkout_${userId}`, course.title);
 
     return res.status(200).json({ msg: "Sucesso", enrollment_id: enrollmentId });
   } catch (err) {

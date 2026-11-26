@@ -4,19 +4,22 @@
 
 const { dbGet, dbRun } = require('../database/db');
 
+const VALID_ROLES = ['student', 'admin'];
+
 class UserModel {
   static async findByEmail(email) {
     return await dbGet("SELECT * FROM users WHERE email = ?", [email]);
   }
 
   static async findById(id) {
-    return await dbGet("SELECT id, name, email FROM users WHERE id = ?", [id]);
+    return await dbGet("SELECT id, name, email, role FROM users WHERE id = ?", [id]);
   }
 
-  static async createUser(name, email, passwordHash) {
+  static async createUser(name, email, passwordHash, role = 'student') {
+    const safeRole = VALID_ROLES.includes(role) ? role : 'student';
     const result = await dbRun(
-      "INSERT INTO users (name, email, pass) VALUES (?, ?, ?)",
-      [name, email, passwordHash]
+      "INSERT INTO users (name, email, pass, role) VALUES (?, ?, ?, ?)",
+      [name, email, passwordHash, safeRole]
     );
     return result.lastID;
   }

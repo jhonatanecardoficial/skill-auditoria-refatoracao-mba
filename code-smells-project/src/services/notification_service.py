@@ -23,3 +23,11 @@ class NotificationService:
             "status": "notificado",
             "canais": ["email", "sms"],
         }
+
+    @staticmethod
+    def notificar_status_pedido(pedido_id: int, novo_status: str) -> None:
+        """Registra notificações desacopladas ao alterar status do pedido."""
+        if novo_status == "aprovado":
+            logger.info("Notificação enviada: Pedido #%d foi aprovado. Preparar envio.", pedido_id)
+        elif novo_status == "cancelado":
+            logger.info("Notificação enviada: Pedido #%d foi cancelado. Devolver estoque.", pedido_id)

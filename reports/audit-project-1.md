@@ -3,10 +3,10 @@ ARCHITECTURE AUDIT REPORT
 ================================
 Project: code-smells-project
 Stack: Python 3 + Flask
-Files: 4 analyzed | ~700 lines of code
+Files: 4 analyzed | ~780 lines of code
 
 ## Summary
-CRITICAL: 5 | HIGH: 3 | MEDIUM: 3 | LOW: 3
+CRITICAL: 6 | HIGH: 2 | MEDIUM: 3 | LOW: 3
 
 ## Findings
 
@@ -40,7 +40,7 @@ Description: As senhas dos usuários são salvas e comparadas em texto puro no b
 Impact: Violação grave de privacidade e segurança; vazamento irreversível das credenciais de todos os usuários.
 Recommendation: Implementar hashing seguro de senhas com Werkzeug/bcrypt e remover o campo de senha do payload de retorno.
 
-### [F6] [HIGH] God Module / Violação Total de Separação de Responsabilidades
+### [F6] [CRITICAL] God Module / Violação Total de Separação de Responsabilidades
 File: models.py:1-314
 Description: O arquivo `models.py` centraliza acesso a dados, manipulação de cursores SQLite, regras de negócio de pedidos (cálculo de total, verificação e decremento de estoque) e geração de relatórios para 4 domínios diferentes (produtos, usuários, pedidos, itens).
 Impact: Código monolítico impossível de testar em isolamento; qualquer alteração em regras de pedido pode quebrar produtos ou usuários.

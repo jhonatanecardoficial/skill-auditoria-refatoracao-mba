@@ -410,6 +410,41 @@ environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
 # Somente libera se ENVIRONMENT for explicitamente "development" ou "testing".
 ```
 
+### Caso E: Proteção de Rotas Administrativas (`/admin/*`) em Node.js / Express (`requireAdmin` + Bearer HMAC + Revalidação no Banco)
+Qualquer rota administrativa identificada pelo prefixo `/admin` (como `GET /api/admin/financial-report`) deve exigir middleware `requireAdmin` verificando assinatura HMAC-SHA256 em tempo constante (`crypto.timingSafeEqual`) e revalidando o papel administrativo no SQLite:
+
+```javascript
+// ANTES (VULNERÁVEL - Dados financeiros e de alunos expostos publicamente):
+router.get('/admin/financial-report', getFinancialReport);
+
+// DEPOIS (SEGURO - Middleware requireAdmin com token HMAC-SHA256 e revalidação no DB):
+// middlewares/authMiddleware.js
+async function requireAdmin(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token de autenticação não fornecido' });
+    }
+    const token = authHeader.slice(7).trim();
+    const userData = verifyAuthToken(token); // valida HMAC-SHA256 e expiração com timingSafeEqual
+    if (!userData) {
+      return res.status(401).json({ error: 'Token inválido ou expirado' });
+    }
+    const dbUser = await UserModel.findById(userData.id);
+    if (!dbUser || userData.role !== 'admin' || dbUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso restrito a administradores' });
+    }
+    req.user = dbUser;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// routes/report.routes.js
+router.get('/admin/financial-report', requireAdmin, getFinancialReport);
+```
+
 ---
 
 ## Padrão 12: Extração de Fat Routes e Migração Integral para MVC em Projetos Parcialmente Organizados

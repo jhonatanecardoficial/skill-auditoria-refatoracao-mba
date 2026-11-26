@@ -1,5 +1,14 @@
 @baseUrl = http://localhost:3000
 
+### Login Administrativo (obter Bearer token para rotas /api/admin/*)
+POST {{baseUrl}}/api/login
+Content-Type: application/json
+
+{
+  "email": "admin@fullcycle.com.br",
+  "password": "admin123"
+}
+
 ### Checkout - sucesso
 POST {{baseUrl}}/api/checkout
 Content-Type: application/json
@@ -24,8 +33,9 @@ Content-Type: application/json
   "card": "5111222233334444"
 }
 
-### Relatório financeiro administrativo
+### Relatório financeiro administrativo (protegido por requireAdmin)
 GET {{baseUrl}}/api/admin/financial-report
+Authorization: Bearer {{adminToken}}
 
 ### Deletar usuário
 DELETE {{baseUrl}}/api/users/1

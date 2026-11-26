@@ -60,6 +60,7 @@ DB tables: <tabelas identificadas>
 
 1. Varrer todo o código-fonte cruzando com o catálogo de anti-patterns em `references/anti-patterns-catalog.md`.
    - **Escopo Integral de Varredura:** A análise NÃO deve se limitar aos arquivos principais ou de rotas; deve inspecionar exaustivamente módulos utilitários, serviços de notificação, helpers, classes de configuração e seeds (`services/`, `utils/`, `helpers/`, `config/`, etc.).
+   - **Auditoria Obrigatória de Rotas (`/admin` e Dados Sensíveis):** Mapear todas as rotas HTTP registradas (Flask `Blueprint`/`@app.route`, Express `Router`/`app.get`, etc.). Qualquer endpoint cujo path contenha `/admin` (ex.: `/admin/query`, `/admin/reset-db`, `/api/admin/financial-report`) ou exponha relatórios financeiros/dados pessoais sem middleware explícito de autenticação e autorização administrativa DEVE gerar um finding `CRITICAL` próprio na Fase 2 (independentemente de outros achados de performance como N+1 no mesmo endpoint) para fechamento obrigatório na Fase 3.
 2. Para cada problema detectado, identificar:
    - Identificador único do achado (ex.: `[F1]`, `[F2]`);
    - Nome do anti-pattern;

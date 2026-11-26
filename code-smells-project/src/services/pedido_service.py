@@ -29,3 +29,11 @@ class PedidoService:
                 total=resultado["total"],
             )
         return resultado
+
+    @staticmethod
+    def atualizar_status(pedido_id: int, novo_status: str) -> bool:
+        """Atualiza status do pedido e dispara notificações de mudança de estado."""
+        atualizado = PedidoModel.atualizar_status(pedido_id, novo_status)
+        if atualizado:
+            NotificationService.notificar_status_pedido(pedido_id, novo_status)
+        return atualizado

@@ -50,7 +50,16 @@ Classificar a arquitetura atual em uma das seguintes categorias:
 
 ---
 
-## 4. Formato de Saída Obrigatório da Fase 1
+## 4. Mapeamento de Superfície de Rotas Administrativas e Sensíveis
+
+Durante a análise inicial e transição para a auditoria, mapear **todos** os endpoints HTTP expostos pela aplicação e marcar para triagem imediata de segurança (`CRITICAL`) qualquer rota que:
+- Contenha segmentos administrativos (`/admin`, `/internal`, `/debug`, `/query`, `/reset`) no path sem middleware explícito de autenticação (`Bearer` token) e verificação de papel administrativo;
+- Exponha relatórios financeiros, métricas internas de receita, listas de pagamentos ou registros de usuários sem controle de acesso compatível;
+- Crie usuários ou atualize perfis permitindo envio de campos de privilégio (`tipo`, `role`, `is_admin`) no payload público.
+
+---
+
+## 5. Formato de Saída Obrigatório da Fase 1
 
 Ao concluir a análise, a skill deve emitir o resumo exatamente no seguinte padrão:
 

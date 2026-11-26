@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import joinedload
 
 from database import db
+from middlewares.auth_middleware import generate_auth_token
 from models.task import Task
 from models.user import User
 from utils.helpers import (
@@ -217,5 +218,5 @@ class UserController:
         return {
             "message": "Login realizado com sucesso",
             "user": user.to_dict(),
-            "token": f"fake-jwt-token-{user.id}",
+            "token": generate_auth_token(user.to_dict()),
         }, 200

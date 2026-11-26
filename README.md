@@ -20,7 +20,7 @@ Repositório público com a entrega completa do desafio técnico de criação de
   - Endpoints vulneráveis de execução SQL arbitrária (`/admin/query`) foram **completamente removidos** da tabela de rotas (retornando HTTP 404).
   - Endpoints administrativos sensíveis e destrutivos (`/admin/reset-db` no Projeto 1 e `GET /api/admin/financial-report` no Projeto 2) são protegidos por `@require_admin` / `requireAdmin` com Bearer token assinado (`itsdangerous` / HMAC-SHA256 com chave via `SECRET_KEY` ou CSPRNG efêmero), revalidação de papel administrativo diretamente no banco SQLite e trava **Fail-Closed** no reset de banco (`ENVIRONMENT` ausente assume `"production"` e retorna `403`).
   - Endpoints públicos de cadastro (`POST /usuarios`, `POST /api/checkout`, `POST /users`) ignoram campos privilegiados (`tipo`/`role`), atribuindo sempre o papel de menor privilégio (`cliente`/`student`/`user`), enquanto `POST /login` em todos os projetos emite tokens assinados criptograficamente (sem tokens falsos literais).
-- **Suíte de Testes E2E 100% Reais (Zero Mocks):** `tests/run_all_tests.py` (22 cenários/suítes black-box subindo servidores reais `python app.py`, `node src/app.js` e `python seed.py` sem `test_client()` nem mocks, 100% aprovados)
+- **Suíte de Testes E2E 100% Reais (Zero Mocks):** `tests/run_all_tests.py` (22 cenários/suítes = 5 + 12 + 5 black-box subindo servidores reais `python app.py`, `node src/app.js` e `python seed.py` sem `test_client()` nem mocks, 100% aprovados)
 - **Documentação de Testes:** `TESTES.md`
 
 ---
@@ -274,6 +274,7 @@ O catálogo (`references/anti-patterns-catalog.md`) reúne **12 anti-patterns** 
   - *Solução:* Uso de `db.serialize()` no `initDb()` com ativação de `PRAGMA foreign_keys = ON;`, seed já hasheada com `hashPassword('123')` e encapsulamento de `dbGet`/`dbAll`/`dbRun` em Promises.
 - **Desafio 4 — Isolamento de conexões de banco em testes no Flask:** O singleton global de conexão impedia injetar bancos de teste limpos entre suítes.
   - *Solução:* Vinculação da conexão ao `flask.g` respeitando `current_app.config.get("DATABASE_PATH")` e propagação explícita de `ENVIRONMENT` no `create_app()`.
+- **Observação de Escopo — Configuração de CORS (`CORS_ORIGINS`):** Por utilizarem autenticação stateless via header `Authorization: Bearer` (e não cookies de sessão vulneráveis a CSRF cross-origin) e manterem o escopo focado nos anti-patterns MVC/SOLID do catálogo, as APIs preservam origem permissiva por padrão para compatibilidade local, porém aceitam restrição explícita de domínios em produção via variável de ambiente `CORS_ORIGINS` em `config/settings.py`.
 
 ---
 
@@ -649,4 +650,4 @@ python tests/run_all_tests.py
 | **Fase 3: Finding Closure Gate (Resolução 1:1)** | Obrigatório | **100% dos 38 achados corrigidos na Fase 3** |
 | **Fase 3: Remoção de Backdoors SQL** | Obrigatório | **`/admin/query` eliminado (retorna 404)** |
 | **Fase 3: Proteção de Endpoints Administrativos (`/admin*`)** | Obrigatório | **`/admin/reset-db` (`@require_admin` + Fail-Closed) e `/api/admin/financial-report` (`requireAdmin` HMAC-SHA256 + revalidação DB)** |
-| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (22 suítes/cenários E2E reais sem mocks) |
+| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (22 suítes/cenários = 5 + 12 + 5 E2E reais sem mocks) |

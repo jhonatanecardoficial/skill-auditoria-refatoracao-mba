@@ -32,12 +32,13 @@ def create_app(test_config: Optional[dict] = None) -> Flask:
     app.config["DEBUG"] = current_settings.debug
     app.config["ENVIRONMENT"] = current_settings.environment
     app.config["DATABASE_PATH"] = current_settings.db_path
+    app.config["CORS_ORIGINS"] = current_settings.cors_origins
 
     if test_config:
         app.config.update(test_config)
 
-    # Configuração de CORS
-    CORS(app)
+    # Configuração de CORS parametrizada por ambiente
+    CORS(app, resources={r"/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     # Teardown de contexto para fechar conexões de banco
     app.teardown_appcontext(close_db)

@@ -25,8 +25,8 @@ def create_app(test_config: Optional[dict] = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    # Inicializa extensões globais
-    CORS(app)
+    # Inicializa extensões globais (CORS parametrizável via CORS_ORIGINS)
+    CORS(app, resources={r"/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
     db.init_app(app)
 
     # Registra rotas (Blueprints desacoplados)

@@ -22,6 +22,8 @@ class Config:
     DEBUG = (os.getenv("FLASK_DEBUG") or "False").strip().lower() in ("true", "1")
     PORT = int((os.getenv("PORT") or "5000").strip())
     ENVIRONMENT = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    _raw_cors = (os.getenv("CORS_ORIGINS") or "").strip()
+    CORS_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()] if _raw_cors else "*"
 
     # Credenciais SMTP desacopladas (sem senhas hardcoded)
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")

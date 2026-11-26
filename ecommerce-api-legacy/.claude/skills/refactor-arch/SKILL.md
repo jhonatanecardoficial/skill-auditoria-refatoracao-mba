@@ -92,18 +92,23 @@ Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]
 2. **Finding Closure Gate (Regra Mandatória de Resolução 1:1):**
    - Todo e qualquer finding apontado e classificado na Fase 2 DEVE ser efetivamente corrigido e sanado na refatoração da Fase 3. NUNCA apenas mover um endpoint vulnerável para um novo arquivo ou pasta sem tratá-lo.
    - **Backdoors e Execução SQL Arbitrária (`CRITICAL`):** Endpoints administrativos que executam queries arbitrárias fornecidas pelo cliente (ex.: `/admin/query`) DEVEM ser **removidos completamente** da aplicação, retornando HTTP 404 Not Found.
-   - **Endpoints Administrativos Destrutivos (`CRITICAL`/`HIGH`):** Endpoints perigosos como reset de banco (`/admin/reset-db`) DEVEM ser protegidos por autenticação e autorização estrita de administrador (`@require_admin` ou token Bearer administrativo) E restritos por ambiente (`ENVIRONMENT in ('development', 'testing')`), retornando HTTP 401 para requisições não autenticadas e HTTP 403 para usuários não administradores ou em ambiente de produção.
+   - **Endpoints Administrativos Destrutivos (`CRITICAL`/`HIGH`):** Endpoints perigosos como reset de banco (`/admin/reset-db`) DEVEM exigir cumulativamente:
+     1. **Trava de ambiente Fail-Closed:** bloquear com HTTP 403 sempre que `ENVIRONMENT` não estiver definido, estiver vazio ou for qualquer valor diferente de `development`/`testing` explícitos (o padrão quando ausente DEVE ser `production`);
+     2. **Autenticação Bearer assinada** com chave carregada de `SECRET_KEY` (ou chave efêmera aleatória via CSPRNG como `secrets.token_hex(32)`, nunca string literal estática), retornando HTTP 401 para requisições não autenticadas ou tokens inválidos;
+     3. **Revalidação do papel administrativo no banco de dados:** confirmar que o usuário do token ainda existe e possui `tipo == 'admin'` (ou `role == 'admin'`) persistido no banco, retornando HTTP 403 caso contrário.
+   - **Proibição Estrita de Mass Assignment / Auto-elevação de Privilégios (`CRITICAL`):** Endpoints públicos de cadastro (`POST /usuarios`, `POST /users`) NUNCA podem aceitar campos privilegiados (`tipo`, `role`, `is_admin`) vindos do payload da requisição; o papel de menor privilégio (`cliente` / `user`) DEVE ser atribuído fixamente no servidor. Endpoints de atualização de perfil/usuário (`PUT /users/:id`) DEVEM rejeitar tentativa de escalação de privilégio com HTTP 403 Forbidden.
+   - **Zero Fallbacks Estáticos de Segredos (`CRITICAL`):** Nunca usar strings literais como fallback em `os.getenv("SECRET_KEY", "...")` ou `process.env.X || "..."`; usar `secrets.token_hex(32)` (ou CSPRNG equivalente) para chaves efêmeras e string vazia `""` para credenciais externas opcionais.
 3. Reestruturar a codebase para o padrão MVC:
    - Extrair configurações e credenciais para módulo próprio (`config/`);
    - Criar Models dedicados por entidade para abstrair o acesso a dados e eliminar SQL Injection;
    - Isolar rotas/views e controllers desacoplados, concentrando regras em serviços;
    - Implementar tratamento de erros centralizado;
    - Configurar o ponto de entrada limpo (`app.py` ou `src/app.js`).
-4. **Validação da Aplicação:**
-   - Iniciar o servidor da aplicação em ambiente de teste;
+4. **Validação da Aplicação (Black-Box em Processos Reais, Sem Mocks):**
+   - Subir os processos reais da aplicação (`python app.py`, `node src/app.js`, `python seed.py` + `python app.py`) com ambiente limpo (sem `ENVIRONMENT`/`SECRET_KEY` definidos), sem recorrer a `app.test_client()`, bancos `:memory:` substitutos ou `test_config`;
    - Validar que a aplicação executa sem erros de inicialização;
-   - Realizar requisições a **todos os endpoints da aplicação**, verificando se as respostas e contratos continuam respondendo corretamente;
-   - Confirmar que os anti-patterns identificados na Fase 2 foram eliminados.
+   - Realizar requisições HTTP reais a **todos os endpoints da aplicação**, incluindo cenários Red-Team contra auto-cadastro administrativo (`POST /usuarios` com `"tipo": "admin"`), trava *fail-closed* quando `ENVIRONMENT` está ausente, forja de token com chaves estáticas, backdoors (`/admin/query` -> 404) e SQL Injection;
+   - Confirmar que todos os anti-patterns identificados na Fase 2 e eventuais regressões foram eliminados.
 5. Imprimir o resumo da conclusão:
 
 ```text

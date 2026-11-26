@@ -16,10 +16,11 @@ Repositório público com a entrega completa do desafio técnico de criação de
   - `reports/audit-project-1.md` (14 achados `[F1]`–`[F14]`: 5 CRITICAL, 3 HIGH, 3 MEDIUM, 3 LOW)
   - `reports/audit-project-2.md` (10 achados `[F1]`–`[F10]`: 3 CRITICAL, 3 HIGH, 2 MEDIUM, 2 LOW)
   - `reports/audit-project-3.md` (11 achados `[F1]`–`[F11]`: 3 CRITICAL, 2 HIGH, 4 MEDIUM, 2 LOW)
-- **Finding Closure Gate:** Todos os 35 achados levantados na Fase 2 foram integralmente sanados na Fase 3.
+- **Finding Closure Gate:** Todos os 35 achados levantados na Fase 2 foram integralmente sanados na Fase 3, com blindagem adicional contra escalação de privilégio e falhas *fail-open*:
   - Endpoints vulneráveis de execução SQL arbitrária (`/admin/query`) foram **completamente removidos** da tabela de rotas (retornando HTTP 404).
-  - Endpoints administrativos destrutivos (`/admin/reset-db`) foram protegidos por token assinado Bearer com verificação de papel (`tipo == "admin"`) e whitelist estrita de ambiente (`ENVIRONMENT in ("development", "testing")`).
-- **Suíte de Testes Automatizados:** `tests/run_all_tests.py` (16 cenários e endpoints testados, 100% aprovados)
+  - Endpoints administrativos destrutivos (`/admin/reset-db`) operam em modo **Fail-Closed** (`ENVIRONMENT` ausente assume `"production"` e retorna `403`), exigem token Bearer assinado com chave via `SECRET_KEY` (ou entropia CSPRNG efêmera via `secrets.token_hex(32)`), e revalidam existência e papel `admin` no banco (`@require_admin` delegando ao `AdminModel`).
+  - Endpoints públicos de cadastro (`POST /usuarios`, `POST /users`) ignoram campos privilegiados (`tipo`/`role`), atribuindo sempre o papel de menor privilégio (`cliente`/`user`).
+- **Suíte de Testes E2E 100% Reais (Zero Mocks):** `tests/run_all_tests.py` (19 cenários/suítes black-box subindo servidores reais `python app.py` e `node src/app.js` sem `test_client()` nem mocks, 100% aprovados)
 - **Documentação de Testes:** `TESTES.md`
 
 ---
@@ -41,27 +42,28 @@ skill-auditoria-refatoracao-mba/
 │   │       ├── architecture-guidelines.md # Diretrizes canônicas do padrão MVC (SoC estrito)
 │   │       └── refactoring-playbook.md    # 12 padrões de transformação com antes/depois
 │   ├── src/                               # Arquitetura MVC refatorada
-│   │   ├── config/settings.py             # Configurações desacopladas do ambiente
+│   │   ├── config/settings.py             # Configurações fail-closed e CSPRNG efêmero
 │   │   ├── database/connection.py         # Gerenciamento de conexão e transações
 │   │   ├── models/                        # Camada de dados pura (Zero SQL nos controllers)
 │   │   │   ├── produto.py                 # Consultas parametrizadas
-│   │   │   ├── usuario.py                 # Hashing Werkzeug e proteção de senhas
+│   │   │   ├── usuario.py                 # Hashing Werkzeug, hmac e proteção de senhas
 │   │   │   ├── pedido.py                  # Transações atômicas, constantes e zero N+1
+│   │   │   ├── admin.py                   # AdminModel para reset transacional seguro
 │   │   │   └── health.py                  # HealthModel (abstração de métricas)
-│   │   ├── controllers/                   # Orquestração HTTP e regras de negócio
-│   │   │   ├── produto_controller.py      # Validação de queries e constraints nomeadas
-│   │   │   ├── usuario_controller.py      # Autenticação com emissão de Bearer token
+│   │   ├── controllers/                   # Orquestração HTTP (anti-Mass Assignment)
+│   │   │   ├── produto_controller.py      # Validação de queries, tipos e constraints nomeadas
+│   │   │   ├── usuario_controller.py      # Cadastro fixado em 'cliente' + Bearer token
 │   │   │   ├── pedido_controller.py
 │   │   │   ├── relatorio_controller.py
 │   │   │   ├── health_controller.py
-│   │   │   └── admin_controller.py        # Reset transacional seguro
+│   │   │   └── admin_controller.py        # Orquestração delegando ao AdminModel
 │   │   ├── services/                      # Serviços de domínio desacoplados
 │   │   │   ├── pedido_service.py          # Regras comerciais de pedidos
 │   │   │   └── notification_service.py    # Despacho estruturado de notificações
 │   │   ├── routes/                        # Blueprints modulares (sem /admin/query)
 │   │   │   └── admin_routes.py            # /admin/reset-db protegido por @require_admin
 │   │   ├── middlewares/                   # Middlewares globais
-│   │   │   ├── auth_middleware.py         # @require_admin e tokens itsdangerous
+│   │   │   ├── auth_middleware.py         # @require_admin (fail-closed + revalidação DB + itsdangerous)
 │   │   │   └── error_handler.py           # Tratamento global sem vazamento de stack trace
 │   │   └── app.py                         # Application Factory
 │   ├── app.py                             # Entrypoint da aplicação
@@ -125,11 +127,11 @@ skill-auditoria-refatoracao-mba/
 │   ├── audit-project-2.md                 # 10 achados em ecommerce-api-legacy (soma exata 10)
 │   └── audit-project-3.md                 # 11 achados em task-manager-api (soma exata 11)
 │
-└── tests/                                 # Suíte unificada de testes automatizados
+└── tests/                                 # Suíte unificada de testes E2E reais (Zero Mocks)
     ├── run_all_tests.py                   # Orquestrador unificado dos 3 projetos
-    ├── test_code_smells_project.py        # 5 suítes (inclui segurança /admin e trava produção)
-    ├── test_ecommerce_api.js              # 6 cenários E2E (checkout, report, cascade, PCI-DSS)
-    └── test_task_manager_api.py           # 5 suítes (inclui controllers, helpers e query filters)
+    ├── test_code_smells_project.py        # 5 suítes (2 processos reais + Red-Team /admin e Mass Assignment)
+    ├── test_ecommerce_api.js              # 9 cenários E2E reais (node src/app.js + auditoria PCI-DSS e SQLite)
+    └── test_task_manager_api.py           # 5 suítes (seed.py + app.py reais + anti-Mass Assignment)
 ```
 
 ---
@@ -298,20 +300,21 @@ code-smells-project/
 ├── database.py              # Shim de compatibilidade retroativa
 ├── requirements.txt
 └── src/
-    ├── config/settings.py           # Configurações imutáveis carregadas via os.getenv
+    ├── config/settings.py           # Configurações fail-closed carregadas via os.getenv + secrets
     ├── database/connection.py       # Context manager de conexão com PRAGMA foreign_keys = ON
     ├── models/                      # Camada de Persistência pura
     │   ├── produto.py               # Consultas parametrizadas com placeholders ?
-    │   ├── usuario.py               # Hashing Werkzeug seguro e omissão de senhas
+    │   ├── usuario.py               # Hashing Werkzeug seguro, hmac e omissão de senhas
     │   ├── pedido.py                # Transações atômicas, constantes nomeadas e zero N+1
+    │   ├── admin.py                 # AdminModel com reset transacional seguro (Zero SQL em controller)
     │   └── health.py                # HealthModel (Zero SQL nos controllers)
     ├── controllers/                 # Camada Controller orquestradora
-    │   ├── produto_controller.py    # Validação de queries numéricas e categorias
-    │   ├── usuario_controller.py    # Emissão de token assinado no login
+    │   ├── produto_controller.py    # Validação de queries numéricas, tipos e categorias
+    │   ├── usuario_controller.py    # Cadastro fixo em 'cliente' + token assinado no login
     │   ├── pedido_controller.py     # Delegação de regras de negócio para PedidoService
     │   ├── relatorio_controller.py  # Relatórios agregados
     │   ├── health_controller.py     # Diagnóstico seguro sem vazar secret_key
-    │   └── admin_controller.py      # Reset protegido transacional (DELETE seguro)
+    │   └── admin_controller.py      # Orquestração delegando ao AdminModel
     ├── services/                    # Camada de Serviços de Domínio
     │   ├── pedido_service.py        # Validação de limites comerciais e orquestração
     │   └── notification_service.py  # Despacho estruturado de notificações
@@ -323,7 +326,7 @@ code-smells-project/
     │   ├── relatorio_routes.py
     │   └── health_routes.py
     └── middlewares/                 # Middlewares globais
-        ├── auth_middleware.py       # Serializador itsdangerous e decorator @require_admin
+        ├── auth_middleware.py       # Serializador itsdangerous + fail-closed + revalidação DB em @require_admin
         └── error_handler.py         # Tratamento global normalizado sem vazar exceções
 ```
 
@@ -479,17 +482,16 @@ task-manager-api/
 - [x] Aplicação inicia sem erros
 - [x] Endpoints originais respondem corretamente
 
-### 4. Evidência Real de Execução da Bateria de Testes Unificada
+### 4. Evidência Real de Execução da Bateria de Testes Unificada (Zero Mocks)
 
 ```text
 =======================================================
 EXECUTANDO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba\venv\Scripts\python.exe -m unittest tests/test_code_smells_project.py
-DIRETÓRIO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba
+DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
-....Banco de dados resetado com autorização administrativa.
-.
+.....
 ----------------------------------------------------------------------
-Ran 5 tests in 1.167s
+Ran 5 tests in 6.268s
 
 OK
 
@@ -497,34 +499,38 @@ OK
 
 =======================================================
 EXECUTANDO: node tests/test_ecommerce_api.js
-DIRETÓRIO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba
+DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
---- Iniciando Testes de ecommerce-api-legacy ---
-[TEST 1] POST /api/checkout (Cartão VISA 4xxx - Sucesso)
-[PAYMENT] Processando cartão ************4444 para o curso 2
-  -> OK: Checkout processado com sucesso.
-[TEST 2] POST /api/checkout (Cartão 5xxx - Recusado)
-[PAYMENT] Processando cartão ************4444 para o curso 1
+--- Iniciando Testes E2E Reais (Zero Mocks) de ecommerce-api-legacy ---
+[TEST 1] Config fail-closed sem variaveis de ambiente
+  -> OK: config.js fail-closed confirmado.
+[TEST 2] POST /api/checkout (Cartao VISA 4xxx - Sucesso)
+  -> OK: Checkout processado sobre HTTP real.
+[TEST 3] POST /api/checkout (Cartao 5xxx - Recusado)
   -> OK: Pagamento recusado conforme regra.
-[TEST 3] POST /api/checkout (Bad Request)
-  -> OK: Rejeição de payload incompleto.
-[TEST 4] POST /api/checkout (Curso Não Encontrado)
-  -> OK: 404 retornado para curso inválido.
-[TEST 5] GET /api/admin/financial-report
-  -> OK: Relatório gerado com sucesso sem N+1.
-[TEST 6] DELETE /api/users/1
-  -> OK: Usuário deletado com integridade referencial.
---- Todos os 6 testes de ecommerce-api-legacy foram aprovados com sucesso! ---
+[TEST 4] POST /api/checkout (Bad Request)
+  -> OK: Rejeicao de payload incompleto.
+[TEST 5] POST /api/checkout (Cartao enviado como inteiro JSON)
+  -> OK: Cartao numerico tratado sem erro 500.
+[TEST 6] POST /api/checkout (Curso Nao Encontrado)
+  -> OK: 404 retornado para curso invalido.
+[TEST 7] GET /api/admin/financial-report
+  -> OK: Relatorio agregado gerado sem N+1.
+[TEST 8] DELETE /api/users/1 e verificacao de zero orfaos
+  -> OK: Exclusao em cascata comprovada no relatorio real.
+[TEST 9] Auditoria PCI-DSS no stdout real e PBKDF2 no SQLite em disco
+  -> OK: Logs PCI-DSS limpos e 100% PBKDF2 no arquivo SQLite real.
+--- Todos os 9 testes E2E reais de ecommerce-api-legacy foram aprovados! ---
 
 ✅ Sucesso em ecommerce-api-legacy
 
 =======================================================
 EXECUTANDO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba\venv\Scripts\python.exe -m unittest tests/test_task_manager_api.py
-DIRETÓRIO: D:\Ecard\MBA\skill-auditoria-refatoracao-mba
+DIRETÓRIO: d:\Ecard\MBA\skill-auditoria-refatoracao-mba
 =======================================================
 .....
 ----------------------------------------------------------------------
-Ran 5 tests in 0.744s
+Ran 5 tests in 6.437s
 
 OK
 
@@ -625,5 +631,5 @@ python tests/run_all_tests.py
 | **Fase 2: Pausa explícita `[y/n]` antes de refatorar** | Obrigatório | **Implementado no template e SKILL.md** |
 | **Fase 3: Finding Closure Gate (Resolução 1:1)** | Obrigatório | **100% dos 35 achados corrigidos na Fase 3** |
 | **Fase 3: Remoção de Backdoors SQL** | Obrigatório | **`/admin/query` eliminado (retorna 404)** |
-| **Fase 3: Proteção de Endpoints Administrativos** | Obrigatório | **`/admin/reset-db` protegido por `@require_admin` + Ambiente** |
-| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (16/16 testes automatizados) |
+| **Fase 3: Proteção de Endpoints Administrativos** | Obrigatório | **`/admin/reset-db` protegido por `@require_admin` + Fail-Closed + Anti-Mass Assignment** |
+| **Fase 3: Aplicação funciona após refatoração** | 3 / 3 Projetos | **3 / 3 Aprovados** (19 suítes/cenários E2E reais sem mocks) |

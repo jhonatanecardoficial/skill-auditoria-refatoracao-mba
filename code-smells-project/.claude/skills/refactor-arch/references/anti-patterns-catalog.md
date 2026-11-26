@@ -32,12 +32,12 @@ Este catálogo orienta a **Fase 2 (Auditoria Arquitetural)** da skill `refactor-
 - **Recomendação:** Decompor em camadas MVC: Models por domínio, Controllers com responsabilidade única e rotas desacopladas.
 
 ### 3. Hardcoded Secrets and Credentials (CRITICAL)
-- **Descrição:** Chaves secretas, senhas de banco de dados, tokens de autenticação ou chaves de gateways gravadas diretamente no código-fonte.
+- **Descrição:** Chaves secretas, senhas de banco de dados, tokens de autenticação, chaves de gateways ou **fallbacks estáticos previsíveis** gravados diretamente no código-fonte.
 - **Sinais de Detecção:**
-  - `SECRET_KEY = "minha-chave-super-secreta-123"`
-  - `dbPass: "senha_super_secreta_prod_123"`, `paymentGatewayKey: "pk_live_..."`
-- **Impacto:** Vazamento de credenciais críticas em controle de versão, impossibilidade de rotação de chaves por ambiente.
-- **Recomendação:** Mover todas as credenciais para variáveis de ambiente carregadas via módulo de configuração (`config/settings.py` ou `.env`).
+  - `SECRET_KEY = "minha-chave-super-secreta-123"` ou `os.getenv("SECRET_KEY", "dev-fallback-key")`
+  - `dbPass: "senha_super_secreta_prod_123"`, `process.env.DB_PASS || "dev_password_fallback"`, `paymentGatewayKey: "pk_live_..."`
+- **Impacto:** Vazamento de credenciais críticas em controle de versão, forja offline de tokens assinados a partir de fallbacks públicos e impossibilidade de rotação de chaves por ambiente.
+- **Recomendação:** Carregar exclusivamente via variáveis de ambiente (`config/settings.py` ou `config.js`), gerando chaves efêmeras com CSPRNG (`secrets.token_hex(32)`) quando `SECRET_KEY` estiver ausente e `""` para credenciais externas opcionais.
 
 ### 4. Weak Cryptography and Password Exposure (CRITICAL)
 - **Descrição:** Armazenamento de senhas em texto puro ou uso de funções criptográficas inseguras/quebradas (ex.: MD5 simples sem salt, hashing customizado rudimentar), além de vazamento de senhas em endpoints públicos.
@@ -48,13 +48,15 @@ Este catálogo orienta a **Fase 2 (Auditoria Arquitetural)** da skill `refactor-
 - **Impacto:** Comprometimento em massa de credenciais de usuários e vulnerabilidade a ataques de dicionário e rainbow tables.
 - **Recomendação:** Utilizar algoritmos modernos de derivação de chaves (bcrypt/Argon2/PBKDF2) e omitir senhas de qualquer serialização de resposta (`to_dict`).
 
-### 5. Arbitrary SQL Execution Endpoints (CRITICAL)
-- **Descrição:** Endpoints de administração ou utilitários expostos que recebem comandos SQL arbitrários do cliente e os executam diretamente no banco.
+### 5. Arbitrary SQL Execution, Unprotected Admin Endpoints, Mass Assignment & Fail-Open Defaults (CRITICAL)
+- **Descrição:** Endpoints administrativos que executam SQL arbitrário (`/admin/query`) ou operam rotas destrutivas (`/admin/reset-db`) sem proteção efetiva; brechas de **Mass Assignment / Escalação de Privilégios** onde cadastros públicos aceitam `tipo`/`role` do payload; e **defaults fail-open** que assumem `"development"` quando `ENVIRONMENT`/`NODE_ENV` não está definido.
 - **Sinais de Detecção:**
   - `@app.route('/admin/query')` executando `cursor.execute(request.json['sql'])`.
-  - Rotas desprotegidas executando `DELETE FROM ...` geral.
-- **Impacto:** Permite destruição total do banco de dados por qualquer cliente da API.
-- **Recomendação:** Remover endpoints de execução arbitrária e encapsular operações administrativas em rotas restritas e seguras.
+  - Rotas destrutivas (`DELETE FROM ...` geral) sem autenticação/revalidação no banco ou sem whitelist estrita de ambiente.
+  - Cadastro público lendo papel do payload: `tipo = dados.get("tipo", "cliente")` ou `role = data.get("role", "user")`.
+  - Default inseguro de ambiente: `os.getenv("ENVIRONMENT", "development")` ou `process.env.NODE_ENV || "development"`.
+- **Impacto:** Permite que qualquer usuário anônimo se cadastre como administrador, faça login e destrua todo o banco de dados mesmo sem `ENVIRONMENT` configurado.
+- **Recomendação:** Remover backdoors de execução SQL arbitrária (404), proibir `tipo`/`role` em cadastros públicos (atribuir `cliente`/`user` fixamente no servidor), adotar default *fail-closed* `"production"` para `ENVIRONMENT`/`NODE_ENV` e revalidar usuário/papel no banco dentro de `@require_admin`.
 
 ### 6. Business Logic in Controllers / Route Handlers (HIGH)
 - **Descrição:** Controllers ou manipuladores de rota executando cálculos de regras de negócio, verificação de estoque, regras de precificação, despacho de pagamentos ou envio de notificações (email, SMS).

@@ -1,9 +1,11 @@
 """Configurações da aplicação Loja API.
 
-Centraliza variáveis de ambiente, configurações de banco e chaves de segurança.
+Centraliza variáveis de ambiente, configurações de banco e chaves de segurança
+com comportamento fail-closed por padrão.
 """
 
 import os
+import secrets
 from typing import NamedTuple
 
 
@@ -17,17 +19,17 @@ class Settings(NamedTuple):
 
 
 def load_settings() -> Settings:
-    """Carrega as configurações a partir de variáveis de ambiente com fallbacks seguros.
+    """Carrega as configurações a partir de variáveis de ambiente com padrão fail-closed.
 
     Returns:
         Settings: Objeto contendo os parâmetros configurados.
     """
     return Settings(
-        secret_key=os.getenv("SECRET_KEY", "dev-secure-secret-key-32-chars-long"),
-        debug=os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1"),
-        db_path=os.getenv("DATABASE_PATH", "loja.db"),
-        port=int(os.getenv("PORT", "5000")),
-        environment=os.getenv("ENVIRONMENT", "development")
+        secret_key=(os.getenv("SECRET_KEY") or "").strip() or secrets.token_hex(32),
+        debug=(os.getenv("FLASK_DEBUG") or "False").strip().lower() in ("true", "1"),
+        db_path=(os.getenv("DATABASE_PATH") or "loja.db").strip(),
+        port=int((os.getenv("PORT") or "5000").strip()),
+        environment=(os.getenv("ENVIRONMENT") or "production").strip().lower(),
     )
 
 

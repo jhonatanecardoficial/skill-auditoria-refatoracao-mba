@@ -93,7 +93,7 @@ class TaskController:
 
         if status not in VALID_STATUSES:
             return {"error": "Status inválido"}, 400
-        if not isinstance(priority, int) or priority < 1 or priority > 5:
+        if isinstance(priority, bool) or not isinstance(priority, int) or priority < 1 or priority > 5:
             return {"error": "Prioridade deve ser entre 1 e 5"}, 400
 
         if user_id and not db.session.get(User, user_id):
@@ -156,7 +156,7 @@ class TaskController:
 
         if "priority" in data:
             p = data["priority"]
-            if not isinstance(p, int) or p < 1 or p > 5:
+            if isinstance(p, bool) or not isinstance(p, int) or p < 1 or p > 5:
                 return {"error": "Prioridade deve ser entre 1 e 5"}, 400
             task.priority = p
 
@@ -256,10 +256,10 @@ class TaskController:
         done = Task.query.filter_by(status="done").count()
         cancelled = Task.query.filter_by(status="cancelled").count()
 
-        now = datetime.now(timezone.utc)
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         overdue_count = Task.query.filter(
             Task.due_date.isnot(None),
-            Task.due_date < now,
+            Task.due_date < now_naive,
             ~Task.status.in_(("done", "cancelled")),
         ).count()
 

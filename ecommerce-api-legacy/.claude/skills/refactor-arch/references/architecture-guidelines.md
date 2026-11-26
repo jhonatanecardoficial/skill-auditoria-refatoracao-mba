@@ -48,8 +48,9 @@ src/
 ### 3.2 Camada Controller (`controllers/`)
 - Receber dados validados da requisição.
 - Orquestrar as chamadas aos Models ou Services.
-- Decidir qual código de status HTTP retornar (`200`, `201`, `400`, `404`, `500`).
+- Decidir qual código de status HTTP retornar (`200`, `201`, `400`, `401`, `403`, `404`, `500`).
 - **NÃO DEVE:** Executar queries SQL diretas (`cursor.execute`, `db.run`, `SELECT ...`), conter concatenação de strings de banco ou acessar diretamente conexões de baixo nível (queries devem pertencer exclusivamente aos Models).
+- **NÃO DEVE (Anti-Mass Assignment / OWASP API3:2023):** Aceitar campos privilegiados (`tipo`, `role`, `is_admin`) oriundos do payload JSON em endpoints públicos de cadastro (`POST /usuarios`, `POST /users`) ou permitir auto-promoção de privilégios em rotas de atualização sem autorização administrativa explícita.
 
 ### 3.3 Camada View / Routes (`views/` ou `routes/`)
 - Mapear a URL e verbo HTTP (`GET`, `POST`, `PUT`, `DELETE`) para a função de Controller correspondente.
@@ -57,12 +58,16 @@ src/
 - **NÃO DEVE:** Conter regras de negócio nem manipulação de banco de dados.
 
 ### 3.4 Camada de Configuração (`config/`)
-- Centralizar a leitura de variáveis de ambiente (`SECRET_KEY`, `PORT`, credenciais).
-- Fornecer valores padrão seguros para desenvolvimento local.
+- Centralizar a leitura de variáveis de ambiente (`SECRET_KEY`, `PORT`, `ENVIRONMENT`/`NODE_ENV`, credenciais).
+- **Aplicar comportamento Fail-Closed por padrão:**
+  - Quando `ENVIRONMENT` ou `NODE_ENV` não estiver definido ou vier vazio, o valor padrão obrigatório DEVE ser `"production"` (nunca `"development"`).
+  - Quando `SECRET_KEY` não estiver definido, gerar chave efêmera aleatória via CSPRNG (`secrets.token_hex(32)`), **nunca** uma string literal estática no código-fonte.
+  - Credenciais externas (`SMTP_PASSWORD`, `DB_PASS`, `PAYMENT_GATEWAY_KEY`) devem assumir string vazia `""` caso ausentes.
 
 ### 3.5 Middlewares e Error Handling (`middlewares/`)
-- Centralizar o tratamento de exceções e respostas de erro uniformes em JSON.
+- Centralizar o tratamento de exceções e respostas de erro uniformes em JSON sem expor stack traces.
 - Gerenciar headers de CORS, autenticação ou logging compartilhado.
+- Middlewares de proteção administrativa (`@require_admin`) DEVEM aplicar cumulativamente: trava de ambiente *fail-closed* (`env in ('development', 'testing')`), validação criptográfica da assinatura do token Bearer e **revalidação do usuário e de seu papel administrativo no banco de dados**.
 
 ### 3.6 Composition Root (`app.py` / `app.js`)
 - Criar a instância principal da aplicação (`app`).

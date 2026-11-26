@@ -15,11 +15,12 @@ const VISA_CARD_PREFIX = '4';
 
 async function processCheckout(req, res, next) {
   try {
-    const userName = req.body.usr;
-    const email = req.body.eml;
-    const rawPassword = req.body.pwd;
-    const courseId = req.body.c_id;
-    const cardNumber = req.body.card;
+    const body = req.body || {};
+    const userName = body.usr;
+    const email = body.eml;
+    const rawPassword = body.pwd;
+    const courseId = body.c_id;
+    const cardNumber = body.card !== undefined && body.card !== null ? String(body.card).trim() : '';
 
     // Validação de presença dos campos obrigatórios do contrato da API
     if (!userName || !email || !courseId || !cardNumber) {

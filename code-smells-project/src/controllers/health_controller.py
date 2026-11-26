@@ -1,7 +1,7 @@
 """Controller responsável por diagnósticos de saúde (Health Check) e catálogo raiz."""
 
 from typing import Tuple
-from flask import jsonify, Response
+from flask import current_app, jsonify, Response
 from src.models.health import HealthModel
 from src.config.settings import settings
 
@@ -9,6 +9,7 @@ from src.config.settings import settings
 def health_check() -> Tuple[Response, int]:
     """Verifica a conectividade do banco de dados e retorna métricas sem vazar segredos ou executar SQL direto no controller."""
     stats = HealthModel.get_stats()
+    env = current_app.config.get("ENVIRONMENT", settings.environment)
 
     return (
         jsonify(
@@ -17,7 +18,7 @@ def health_check() -> Tuple[Response, int]:
                 "database": "connected",
                 "counts": stats,
                 "versao": "1.0.0",
-                "ambiente": settings.environment,
+                "ambiente": env,
             }
         ),
         200,

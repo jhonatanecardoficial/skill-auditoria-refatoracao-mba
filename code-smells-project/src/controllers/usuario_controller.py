@@ -29,13 +29,13 @@ def criar_usuario() -> Tuple[Response, int]:
     nome = str(dados.get("nome", "")).strip()
     email = str(dados.get("email", "")).strip()
     senha = str(dados.get("senha", "")).strip()
-    tipo = str(dados.get("tipo", "cliente")).strip()
 
     if not nome or not email or not senha:
         return jsonify({"erro": "Nome, email e senha são obrigatórios"}), 400
 
     try:
-        novo_id = UsuarioModel.criar(nome, email, senha, tipo)
+        # Regra de segurança: cadastro público atribui exclusivamente papel de menor privilégio ('cliente').
+        novo_id = UsuarioModel.criar(nome, email, senha, tipo="cliente")
         return jsonify({"dados": {"id": novo_id}, "sucesso": True}), 201
     except Exception as exc:
         if "UNIQUE constraint failed" in str(exc):

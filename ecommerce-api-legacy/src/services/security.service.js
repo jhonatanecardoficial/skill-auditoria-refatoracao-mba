@@ -23,14 +23,16 @@ function hashPassword(password) {
  * @returns {boolean} True se a senha for válida.
  */
 function verifyPassword(password, storedHash) {
-  if (!storedHash) return false;
+  if (!storedHash || !password) return false;
   if (storedHash.includes(':')) {
     const [salt, originalHash] = storedHash.split(':');
     const hash = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
-    return hash === originalHash;
+    const bufHash = Buffer.from(hash, 'hex');
+    const bufOriginal = Buffer.from(originalHash || '', 'hex');
+    if (bufHash.length !== bufOriginal.length) return false;
+    return crypto.timingSafeEqual(bufHash, bufOriginal);
   }
-  // Suporte a senhas legadas em texto plano de seeds
-  return password === storedHash;
+  return false;
 }
 
 /**

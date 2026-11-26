@@ -6,8 +6,11 @@ from typing import Any, Dict, Optional
 from flask import current_app, jsonify, request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from src.config.settings import settings
+from src.models.usuario import UsuarioModel
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_RESET_ENVIRONMENTS = ("development", "testing")
 
 
 def _get_serializer() -> URLSafeTimedSerializer:
@@ -71,13 +74,11 @@ def require_admin(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 1. Verificação de restrição de ambiente (whitelist estrita)
-        env = (
-            current_app.config.get("ENVIRONMENT") or settings.environment
-            if current_app
-            else settings.environment
-        )
-        if env not in ("development", "testing"):
+        # 1. Verificação Fail-Closed de ambiente (apenas 'development' ou 'testing' explícitos)
+        env = str(
+            current_app.config.get("ENVIRONMENT", "") if current_app else ""
+        ).strip().lower()
+        if env not in ALLOWED_RESET_ENVIRONMENTS:
             return (
                 jsonify(
                     {
@@ -114,8 +115,14 @@ def require_admin(f):
                 401,
             )
 
-        # 3. Verificação de papel administrativo
-        if user_data.get("tipo") != "admin":
+        # 3. Verificação de papel administrativo no token E revalidação no banco de dados
+        user_id = user_data.get("id")
+        db_user = UsuarioModel.get_por_id(user_id) if user_id is not None else None
+        if (
+            user_data.get("tipo") != "admin"
+            or not db_user
+            or db_user.get("tipo") != "admin"
+        ):
             return (
                 jsonify(
                     {

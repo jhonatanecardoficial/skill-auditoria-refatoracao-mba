@@ -3,9 +3,12 @@
 Implementa hashing seguro de senhas com Werkzeug e proteção contra SQL Injection.
 """
 
+import hmac
 from typing import Any, Dict, List, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from src.database.connection import get_db
+
+TIPOS_VALIDOS = ("cliente", "admin")
 
 
 class UsuarioModel:
@@ -50,6 +53,8 @@ class UsuarioModel:
         Returns:
             int: ID do novo usuário inserido.
         """
+        if tipo not in TIPOS_VALIDOS:
+            raise ValueError("Tipo de usuário inválido")
         senha_hash = generate_password_hash(senha)
         db = get_db()
         cursor = db.cursor()
@@ -92,8 +97,13 @@ class UsuarioModel:
         except Exception:
             is_valid = False
 
-        # Fallback para senhas de seed pré-existentes em texto plano
-        if not is_valid and stored_password == senha:
+        # Fallback exclusivo para senhas de seed pré-existentes em texto plano (migração segura)
+        if (
+            not is_valid
+            and stored_password
+            and not stored_password.startswith(("scrypt:", "pbkdf2:"))
+            and hmac.compare_digest(stored_password, senha)
+        ):
             is_valid = True
             # Atualiza para hash seguro automaticamente
             novo_hash = generate_password_hash(senha)

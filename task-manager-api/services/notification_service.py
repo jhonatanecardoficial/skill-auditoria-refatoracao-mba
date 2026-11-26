@@ -33,6 +33,9 @@ class NotificationService:
 
     def send_email(self, to: str, subject: str, body: str) -> bool:
         """Envia mensagem de email via protocolo SMTP com criptografia TLS."""
+        if not self.email_user or not self.email_password:
+            logger.warning("Credenciais SMTP não configuradas; envio ignorado para %s", to)
+            return False
         try:
             server = smtplib.SMTP(self.email_host, self.email_port, timeout=10)
             server.starttls()

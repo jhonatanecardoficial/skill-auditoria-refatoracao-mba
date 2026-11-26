@@ -4,10 +4,11 @@
  */
 
 const sqlite3 = require('sqlite3').verbose();
+const config = require('../config/config');
 const { hashPassword } = require('../services/security.service');
 
-// Instância compartilhada do banco SQLite em memória
-const db = new sqlite3.Database(':memory:');
+// Instância configurável do banco SQLite (suporta arquivo real via DB_PATH ou :memory:)
+const db = new sqlite3.Database(config.dbPath);
 
 /**
  * Executa uma consulta que retorna uma única linha com Promise.
@@ -68,10 +69,10 @@ function initDb() {
     db.run("CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
     const seedPasswordHash = hashPassword('123');
-    db.run("INSERT INTO users (name, email, pass) VALUES ('Leonan', 'leonan@fullcycle.com.br', ?)", [seedPasswordHash]);
-    db.run("INSERT INTO courses (title, price, active) VALUES ('Clean Architecture', 997.00, 1), ('Docker', 497.00, 1)");
-    db.run("INSERT INTO enrollments (user_id, course_id) VALUES (1, 1)");
-    db.run("INSERT INTO payments (enrollment_id, amount, status) VALUES (1, 997.00, 'PAID')");
+    db.run("INSERT OR IGNORE INTO users (id, name, email, pass) VALUES (1, 'Leonan', 'leonan@fullcycle.com.br', ?)", [seedPasswordHash]);
+    db.run("INSERT OR IGNORE INTO courses (id, title, price, active) VALUES (1, 'Clean Architecture', 997.00, 1), (2, 'Docker', 497.00, 1)");
+    db.run("INSERT OR IGNORE INTO enrollments (id, user_id, course_id) VALUES (1, 1, 1)");
+    db.run("INSERT OR IGNORE INTO payments (id, enrollment_id, amount, status) VALUES (1, 1, 997.00, 'PAID')");
   });
 }
 

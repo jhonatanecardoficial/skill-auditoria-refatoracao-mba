@@ -45,7 +45,7 @@ class ReportController:
 
         overdue_tasks = Task.query.filter(
             Task.due_date.isnot(None),
-            Task.due_date < now,
+            Task.due_date < now_naive,
             ~Task.status.in_(("done", "cancelled")),
         ).all()
 
@@ -66,10 +66,10 @@ class ReportController:
             for t in overdue_tasks
         ]
 
-        seven_days_ago = now - timedelta(days=7)
-        recent_tasks = Task.query.filter(Task.created_at >= seven_days_ago).count()
+        seven_days_ago_naive = now_naive - timedelta(days=7)
+        recent_tasks = Task.query.filter(Task.created_at >= seven_days_ago_naive).count()
         recent_done = Task.query.filter(
-            Task.status == "done", Task.updated_at >= seven_days_ago
+            Task.status == "done", Task.updated_at >= seven_days_ago_naive
         ).count()
 
         users = User.query.options(joinedload(User.tasks)).all()

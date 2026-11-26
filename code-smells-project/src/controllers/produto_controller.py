@@ -1,5 +1,6 @@
 """Controller responsável pelas regras de requisição e resposta de Produtos."""
 
+import sqlite3
 from typing import Tuple
 from flask import jsonify, request, Response
 from src.models.produto import ProdutoModel
@@ -47,10 +48,10 @@ def criar_produto() -> Tuple[Response, int]:
     estoque = dados["estoque"]
     categoria = str(dados.get("categoria", "geral")).strip()
 
-    if not isinstance(preco, (int, float)) or preco < 0:
-        return jsonify({"erro": "Preço não pode ser negativo"}), 400
-    if not isinstance(estoque, int) or estoque < 0:
-        return jsonify({"erro": "Estoque não pode ser negativo"}), 400
+    if isinstance(preco, bool) or not isinstance(preco, (int, float)) or preco < 0:
+        return jsonify({"erro": "Preço inválido ou negativo"}), 400
+    if isinstance(estoque, bool) or not isinstance(estoque, int) or estoque < 0:
+        return jsonify({"erro": "Estoque inválido ou negativo"}), 400
     if len(nome) < NOME_MIN_LEN:
         return jsonify({"erro": "Nome muito curto"}), 400
     if len(nome) > NOME_MAX_LEN:
@@ -99,10 +100,10 @@ def atualizar_produto(id: int) -> Tuple[Response, int]:
             400,
         )
 
-    if not isinstance(preco, (int, float)) or preco < 0:
-        return jsonify({"erro": "Preço não pode ser negativo"}), 400
-    if not isinstance(estoque, int) or estoque < 0:
-        return jsonify({"erro": "Estoque não pode ser negativo"}), 400
+    if isinstance(preco, bool) or not isinstance(preco, (int, float)) or preco < 0:
+        return jsonify({"erro": "Preço inválido ou negativo"}), 400
+    if isinstance(estoque, bool) or not isinstance(estoque, int) or estoque < 0:
+        return jsonify({"erro": "Estoque inválido ou negativo"}), 400
 
     ProdutoModel.atualizar(id, nome, descricao, float(preco), estoque, categoria)
     return jsonify({"sucesso": True, "mensagem": "Produto atualizado"}), 200
@@ -114,7 +115,18 @@ def deletar_produto(id: int) -> Tuple[Response, int]:
     if not produto:
         return jsonify({"erro": "Produto não encontrado"}), 404
 
-    ProdutoModel.deletar(id)
+    try:
+        ProdutoModel.deletar(id)
+    except sqlite3.IntegrityError:
+        return (
+            jsonify(
+                {
+                    "erro": "Produto vinculado a pedidos não pode ser excluído",
+                    "sucesso": False,
+                }
+            ),
+            409,
+        )
     return jsonify({"sucesso": True, "mensagem": "Produto deletado"}), 200
 
 

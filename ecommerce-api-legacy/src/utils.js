@@ -42,8 +42,8 @@ function logAndCache(key, data) {
 }
 
 function badCrypto(pwd) {
-  // Utiliza hash seguro por debaixo dos panos mantendo a assinatura esperada
-  return hashPassword(pwd).substring(0, 16);
+  // Utiliza hash PBKDF2 completo com salt, preservando a assinatura esperada
+  return hashPassword(pwd);
 }
 
 module.exports = {

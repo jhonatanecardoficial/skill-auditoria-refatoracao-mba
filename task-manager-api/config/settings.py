@@ -1,6 +1,7 @@
-"""Configurações centralizadas para o serviço Task Manager API."""
+"""Configurações centralizadas para o serviço Task Manager API (Fail-Closed)."""
 
 import os
+import secrets
 from typing import NamedTuple
 
 
@@ -13,20 +14,20 @@ class EmailConfig(NamedTuple):
 
 
 class Config:
-    """Configuração base da aplicação com variáveis de ambiente e fallbacks seguros."""
+    """Configuração base da aplicação com variáveis de ambiente e padrão fail-closed."""
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secure-secret-key-task-manager-32-chars")
-    SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI", "sqlite:///tasks.db")
+    SECRET_KEY = (os.getenv("SECRET_KEY") or "").strip() or secrets.token_hex(32)
+    SQLALCHEMY_DATABASE_URI = (os.getenv("SQLALCHEMY_DATABASE_URI") or "sqlite:///tasks.db").strip()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    DEBUG = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1")
-    PORT = int(os.getenv("PORT", "5000"))
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+    DEBUG = (os.getenv("FLASK_DEBUG") or "False").strip().lower() in ("true", "1")
+    PORT = int((os.getenv("PORT") or "5000").strip())
+    ENVIRONMENT = (os.getenv("ENVIRONMENT") or "production").strip().lower()
 
-    # Credenciais SMTP desacopladas
+    # Credenciais SMTP desacopladas (sem senhas hardcoded)
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER = os.getenv("SMTP_USER", "taskmanager@gmail.com")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "dev-smtp-secret-key")
+    SMTP_PORT = int((os.getenv("SMTP_PORT") or "587").strip())
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 
 def get_config() -> Config:

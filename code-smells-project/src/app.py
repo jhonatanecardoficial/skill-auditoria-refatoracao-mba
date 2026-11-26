@@ -1,10 +1,10 @@
 """Fábrica de aplicação (Application Factory) para o serviço da Loja."""
 
-import os
+from typing import Optional
 from flask import Flask
 from flask_cors import CORS
 
-from src.config.settings import settings
+from src.config.settings import load_settings
 from src.database.connection import close_db, init_db
 from src.middlewares.error_handler import register_error_handlers
 from src.routes import (
@@ -17,7 +17,7 @@ from src.routes import (
 )
 
 
-def create_app(test_config: dict = None) -> Flask:
+def create_app(test_config: Optional[dict] = None) -> Flask:
     """Cria e configura uma instância da aplicação Flask no padrão MVC.
 
     Args:
@@ -26,10 +26,12 @@ def create_app(test_config: dict = None) -> Flask:
     Returns:
         Flask: Instância da aplicação pronta para execução.
     """
+    current_settings = load_settings()
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = settings.secret_key
-    app.config["DEBUG"] = settings.debug
-    app.config["ENVIRONMENT"] = os.getenv("ENVIRONMENT", settings.environment)
+    app.config["SECRET_KEY"] = current_settings.secret_key
+    app.config["DEBUG"] = current_settings.debug
+    app.config["ENVIRONMENT"] = current_settings.environment
+    app.config["DATABASE_PATH"] = current_settings.db_path
 
     if test_config:
         app.config.update(test_config)
@@ -52,6 +54,6 @@ def create_app(test_config: dict = None) -> Flask:
     app.register_blueprint(admin_bp)
 
     # Inicializa banco e seeds no primeiro boot
-    init_db(app.config.get("DATABASE_PATH", settings.db_path))
+    init_db(app.config["DATABASE_PATH"])
 
     return app

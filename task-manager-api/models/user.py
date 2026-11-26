@@ -4,7 +4,6 @@ Garante armazenamento seguro de senhas através de PBKDF2/scrypt e previne vazam
 """
 
 from datetime import datetime, timezone
-import hashlib
 from typing import Any, Dict
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db
@@ -49,7 +48,7 @@ class User(db.Model):
         self.password = generate_password_hash(pwd)
 
     def check_password(self, pwd: str) -> bool:
-        """Verifica se a senha informada corresponde ao hash seguro ou legado armazenado.
+        """Verifica se a senha informada corresponde ao hash seguro armazenado.
 
         Args:
             pwd: Senha a ser testada.
@@ -57,22 +56,12 @@ class User(db.Model):
         Returns:
             bool: True se a senha for autêntica.
         """
-        if not self.password:
+        if not self.password or not pwd:
             return False
         try:
-            if check_password_hash(self.password, pwd):
-                return True
+            return check_password_hash(self.password, pwd)
         except Exception:
-            pass
-
-        # Suporte a senhas antigas em texto plano ou MD5 legado com migração transparente
-        legacy_md5 = hashlib.md5(pwd.encode()).hexdigest()
-        if self.password == pwd or self.password == legacy_md5:
-            # Atualiza para hash seguro
-            self.set_password(pwd)
-            db.session.commit()
-            return True
-        return False
+            return False
 
     def is_admin(self) -> bool:
         """Verifica se o usuário possui privilégios de administrador.

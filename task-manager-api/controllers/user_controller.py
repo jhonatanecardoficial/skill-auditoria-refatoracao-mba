@@ -11,7 +11,6 @@ from models.user import User
 from utils.helpers import (
     MIN_PASSWORD_LENGTH,
     sanitize_string,
-    VALID_ROLES,
     validate_email,
 )
 
@@ -60,7 +59,6 @@ class UserController:
         name = sanitize_string(data.get("name"))
         email = sanitize_string(data.get("email"))
         password = data.get("password")
-        role = data.get("role", "user")
 
         if not name:
             return {"error": "Nome é obrigatório"}, 400
@@ -79,14 +77,12 @@ class UserController:
         if existing:
             return {"error": "Email já cadastrado"}, 409
 
-        if role not in VALID_ROLES:
-            return {"error": "Role inválido"}, 400
-
         user = User()
         user.name = name
         user.email = email
         user.set_password(password)
-        user.role = role
+        # Regra de segurança: cadastro público atribui sempre papel padrão 'user'
+        user.role = "user"
 
         try:
             db.session.add(user)
@@ -127,11 +123,8 @@ class UserController:
                 return {"error": "Senha muito curta"}, 400
             user.set_password(pwd)
 
-        if "role" in data:
-            r = data["role"]
-            if r not in VALID_ROLES:
-                return {"error": "Role inválido"}, 400
-            user.role = r
+        if "role" in data and data["role"] != user.role:
+            return {"error": "Alteração de papel não permitida neste endpoint"}, 403
 
         if "active" in data:
             user.active = bool(data["active"])

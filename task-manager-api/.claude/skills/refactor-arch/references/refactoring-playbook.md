@@ -68,28 +68,47 @@ router.post('/checkout', (req, res, next) => checkoutController.handle(req, res,
 
 ---
 
-## Padrão 3: Externalização de Configurações e Segredos
+## Padrão 3: Externalização de Configurações e Segredos (Fail-Closed e Zero Fallbacks Estáticos)
 
-### Antes (Hardcoded no arquivo de aplicação):
+Nunca utilize strings literais como fallback de `SECRET_KEY`, senhas ou chaves de API (`os.getenv("SECRET_KEY", "dev-...")`): como o código reside no repositório, um fallback estático público permite que qualquer atacante faça **forja offline de tokens administrativos** sem conhecer nenhuma senha. Da mesma forma, variáveis de ambiente (`ENVIRONMENT`/`NODE_ENV`) DEVEM falhar de forma fechada (**Fail-Closed**), assumindo `"production"` quando ausentes ou vazias.
+
+### Antes (Hardcoded no arquivo de aplicação ou fallback estático/fail-open):
 ```python
-# app.py
-app.config["SECRET_KEY"] = "minha-chave-super-secreta-123"
-app.config["DEBUG"] = True
+# app.py / settings.py (INSEGURO)
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-fallback-key-only")  # Permite forja de token!
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")  # Fail-open!
 ```
 
-### Depois (Isolado em `config/settings.py` via variáveis de ambiente):
+### Depois (Isolado em `config/settings.py` com CSPRNG efêmero e Fail-Closed):
 ```python
 # config/settings.py
 import os
+import secrets
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-fallback-key-only")
-    DEBUG = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1")
-    DATABASE_PATH = os.getenv("DATABASE_PATH", "loja.db")
+    SECRET_KEY = (os.getenv("SECRET_KEY") or "").strip() or secrets.token_hex(32)
+    DEBUG = (os.getenv("FLASK_DEBUG") or "False").strip().lower() in ("true", "1")
+    DATABASE_PATH = (os.getenv("DATABASE_PATH") or "loja.db").strip()
+    ENVIRONMENT = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 # app.py
 from config.settings import Config
 app.config.from_object(Config)
+```
+
+```javascript
+// Node.js equivalente: src/config/config.js (Fail-Closed e sem segredos estáticos)
+const config = {
+  port: parseInt(process.env.PORT || "3000", 10),
+  dbPath: process.env.DB_PATH || ":memory:",
+  dbUser: process.env.DB_USER || "",
+  dbPass: process.env.DB_PASS || "",
+  paymentGatewayKey: process.env.PAYMENT_GATEWAY_KEY || "",
+  smtpUser: process.env.SMTP_USER || "",
+  nodeEnv: (process.env.NODE_ENV || "production").trim().toLowerCase()
+};
 ```
 
 ---
@@ -279,7 +298,7 @@ const isPaymentApproved = cardNumber.startsWith(VISA_PREFIX);
 
 ---
 
-## Padrão 11: Remoção de Backdoors SQL e Proteção de Endpoints Administrativos Destrutivos
+## Padrão 11: Remoção de Backdoors SQL, Proteção de Endpoints Administrativos, Anti-Mass Assignment e Trava Fail-Closed
 
 ### Caso A: Remoção Definitiva de Backdoors de Execução SQL Arbitrária
 Endpoints como `/admin/query` que recebem e executam SQL arbitrário fornecido pelo cliente são backdoors inaceitáveis e devem ser **completamente removidos** da aplicação, respondendo HTTP 404.
@@ -297,33 +316,55 @@ def executar_query():
 # Qualquer requisição para /admin/query recebe automaticamente HTTP 404 Not Found.
 ```
 
-### Caso B: Proteção Estrita de Endpoints Administrativos Destrutivos
-Operações como `/admin/reset-db` devem exigir autenticação robusta (Bearer Token assinado), autorização de papel (`tipo == "admin"`) e restrição mandatória de ambiente (bloqueio em produção).
+### Caso B: Proteção Estrita de Endpoints Administrativos Destrutivos (Com Revalidação no Banco e Zero SQL no Controller)
+Operações como `/admin/reset-db` devem exigir cumulativamente: trava *fail-closed* de ambiente, autenticação Bearer assinada, **revalidação do usuário e do papel (`tipo == "admin"`) diretamente no banco de dados**, e delegação da escrita SQL para a camada Model (`AdminModel`).
 
 ```python
+# models/admin.py (Persistência isolada no Model - Zero SQL no Controller)
+class AdminModel:
+    @staticmethod
+    def reset_database() -> None:
+        db = get_db()
+        cursor = db.cursor()
+        try:
+            cursor.execute("DELETE FROM itens_pedido")
+            cursor.execute("DELETE FROM pedidos")
+            cursor.execute("DELETE FROM produtos")
+            cursor.execute("DELETE FROM usuarios")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
 # middlewares/auth_middleware.py
 from functools import wraps
 from flask import request, jsonify, current_app
+from src.models.usuario import UsuarioModel
+
+ALLOWED_RESET_ENVIRONMENTS = ("development", "testing")
 
 def require_admin(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # 1. Bloqueio em ambiente de produção
-        env = current_app.config.get("ENVIRONMENT", "production")
-        if env not in ("development", "testing"):
+        # 1. Trava de ambiente Fail-Closed (bloqueia se ausente, vazio ou 'production')
+        env = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+        if env not in ALLOWED_RESET_ENVIRONMENTS:
             return jsonify({"erro": "Operação não permitida neste ambiente", "sucesso": False}), 403
 
-        # 2. Validação de token Bearer
+        # 2. Validação criptográfica do token Bearer
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return jsonify({"erro": "Token de autenticação não fornecido", "sucesso": False}), 401
 
-        token = auth_header.split(" ")[1]
+        token = auth_header.split(" ", 1)[1].strip()
         user_data = verify_auth_token(token)
         if not user_data:
             return jsonify({"erro": "Token inválido ou expirado", "sucesso": False}), 401
 
-        if user_data.get("tipo") != "admin":
+        # 3. Revalidação do usuário e papel administrativo no banco de dados
+        user_id = user_data.get("id")
+        db_user = UsuarioModel.get_por_id(user_id) if user_id is not None else None
+        if user_data.get("tipo") != "admin" or not db_user or db_user.get("tipo") != "admin":
             return jsonify({"erro": "Acesso restrito a administradores", "sucesso": False}), 403
 
         return f(*args, **kwargs)
@@ -333,8 +374,40 @@ def require_admin(f):
 @admin_bp.route("/admin/reset-db", methods=["POST"])
 @require_admin
 def reset_database_route():
-    sucesso, mensagem = admin_controller.reset_database()
-    return jsonify({"mensagem": mensagem, "sucesso": sucesso}), 200
+    return admin_controller.reset_database()
+```
+
+### Caso C: Proibição Estrita de Mass Assignment / Auto-elevação de Privilégio em Cadastro Público
+O papel de administrador (`admin`) **NUNCA** pode ser aceito a partir do payload JSON de endpoints públicos de criação (`POST /usuarios`, `POST /users`) ou auto-alterado em rotas públicas de atualização (`PUT /users/:id`). Caso contrário, qualquer usuário anônimo se registra como `admin`, faz login e ganha acesso irrestrito aos endpoints administrativos.
+
+```python
+# ANTES (VULNERÁVEL - Mass Assignment / Privilege Escalation):
+def criar_usuario():
+    dados = request.get_json(silent=True) or {}
+    tipo = str(dados.get("tipo", "cliente")).strip()  # BRECHA CRÍTICA!
+    novo_id = UsuarioModel.criar(nome, email, senha, tipo)
+
+# DEPOIS (SEGURO - Papel de menor privilégio imposto no servidor):
+def criar_usuario():
+    dados = request.get_json(silent=True) or {}
+    # Campo 'tipo'/'role' do payload público é completamente ignorado
+    novo_id = UsuarioModel.criar(nome, email, senha, tipo="cliente")
+
+# Em rotas PUT /users/:id sem autenticação administrativa:
+if "role" in data and data["role"] != user.role:
+    return {"error": "Alteração de papel não permitida neste endpoint"}, 403
+```
+
+### Caso D: Trava de Ambiente Fail-Closed (Bloqueio Quando `ENVIRONMENT` Não Estiver Definido)
+Quando `ENVIRONMENT` (ou `NODE_ENV`) não estiver definido na máquina ou container, a aplicação DEVE assumir modo restritivo (`"production"`) para impedir exposição acidental de operações administrativas em deploys reais.
+
+```python
+# ANTES (VULNERÁVEL - Fail-Open):
+environment = os.getenv("ENVIRONMENT", "development")  # Abre rotas admin sem config!
+
+# DEPOIS (SEGURO - Fail-Closed):
+environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+# Somente libera se ENVIRONMENT for explicitamente "development" ou "testing".
 ```
 
 ---

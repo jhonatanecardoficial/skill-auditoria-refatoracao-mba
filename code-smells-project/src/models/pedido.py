@@ -30,16 +30,30 @@ class PedidoModel:
         Returns:
             Dict com 'pedido_id' e 'total' ou 'erro' em caso de falha de validação.
         """
+        if isinstance(usuario_id, bool) or not isinstance(usuario_id, int) or usuario_id <= 0:
+            return {"erro": "Usuario ID inválido"}
+
         db = get_db()
         cursor = db.cursor()
 
         try:
+            cursor.execute("SELECT id FROM usuarios WHERE id = ?", (usuario_id,))
+            if cursor.fetchone() is None:
+                return {"erro": f"Usuário {usuario_id} não encontrado"}
+
             total = 0.0
             itens_processados = []
 
             for item in itens:
+                if not isinstance(item, dict):
+                    return {"erro": "Formato de item inválido"}
                 prod_id = item.get("produto_id")
                 qtd = item.get("quantidade", 0)
+
+                if isinstance(prod_id, bool) or not isinstance(prod_id, int) or prod_id <= 0:
+                    return {"erro": "Produto ID inválido"}
+                if isinstance(qtd, bool) or not isinstance(qtd, int) or qtd <= 0:
+                    return {"erro": "Quantidade deve ser um inteiro positivo"}
 
                 cursor.execute(
                     "SELECT id, nome, preco, estoque FROM produtos WHERE id = ?",
